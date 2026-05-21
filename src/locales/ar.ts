@@ -1,0 +1,32 @@
+import type { TemplateLabels } from "../core/types.js";
+
+export const arLabels: TemplateLabels = {
+  documentTitle: "مستند",
+  seller: "البائع",
+  client: "العميل",
+  number: "الرقم",
+  issueDate: "التاريخ",
+  dueDate: "تاريخ الاستحقاق",
+  item: "الصنف",
+  description: "الوصف",
+  quantity: "الكمية",
+  unitPrice: "سعر الوحدة",
+  amount: "المبلغ",
+  subtotal: "المجموع الفرعي",
+  discount: "الخصم",
+  taxableBase: "الاساس الخاضع للضريبة",
+  vat: "الضريبة على القيمة المضافة",
+  total: "المجموع",
+  paymentTerms: "شروط الدفع",
+  bankDetails: "المعلومات البنكية",
+  notes: "ملاحظات",
+  currency: "العملة",
+  bankName: "اسم البنك",
+  holderName: "اسم صاحب الحساب",
+  rib: "رقم الحساب البنكي المحلي",
+  swiftCode: "سويفت",
+  iban: "آيبان",
+  ice: "ICE",
+  if: "IF",
+  rc: "RC"
+};

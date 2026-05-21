@@ -1,0 +1,58 @@
+{
+  "name": "invoice-kit",
+  "version": "0.1.0",
+  "description": "Lightweight TypeScript library for generating Moroccan business documents as PDFs.",
+  "author": "Itri Cloud Labs",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Itri-Cloud-Labs/invoice-kit.git"
+  },
+  "homepage": "https://github.com/Itri-Cloud-Labs/invoice-kit#readme",
+  "bugs": {
+    "url": "https://github.com/Itri-Cloud-Labs/invoice-kit/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "clean": "node -e \"import('node:fs/promises').then((fs) => fs.rm('dist', { recursive: true, force: true }))\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "node smoke-test.mjs",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "keywords": [
+    "invoice",
+    "quote",
+    "purchase-order",
+    "delivery-note",
+    "morocco",
+    "pdf",
+    "typescript"
+  ],
+  "dependencies": {
+    "pdfkit": "^0.17.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/pdfkit": "^0.17.3",
+    "typescript": "^5.8.3"
+  }
+}

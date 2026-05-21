@@ -1,0 +1,32 @@
+import type { TemplateLabels } from "../core/types.js";
+
+export const frLabels: TemplateLabels = {
+  documentTitle: "Document",
+  seller: "Vendeur",
+  client: "Client",
+  number: "Numero",
+  issueDate: "Date",
+  dueDate: "Echeance",
+  item: "Article",
+  description: "Description",
+  quantity: "Quantite",
+  unitPrice: "Prix unitaire",
+  amount: "Montant",
+  subtotal: "Sous-total",
+  discount: "Remise",
+  taxableBase: "Base taxable",
+  vat: "TVA",
+  total: "Total TTC",
+  paymentTerms: "Conditions de paiement",
+  bankDetails: "Coordonnees bancaires",
+  notes: "Notes",
+  currency: "Devise",
+  bankName: "Banque",
+  holderName: "Titulaire",
+  rib: "RIB",
+  swiftCode: "SWIFT",
+  iban: "IBAN",
+  ice: "ICE",
+  if: "IF",
+  rc: "RC"
+};
