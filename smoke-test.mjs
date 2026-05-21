@@ -47,7 +47,8 @@ const startLogoServer = async () => {
   };
 };
 
-const { close, logoUrl } = await startLogoServer();
+const {logoUrl, close} = await startLogoServer()
+
 
 try {
   const seller = {
@@ -123,7 +124,7 @@ try {
 
   const quote = createQuote({
     number: "DEV-2026-0012",
-    logo: logoUrl,
+    logo: "https://thispersondoesnotexist.com",
     title: "Proposition commerciale de cadrage et deploiement",
     locale: "fr-MA",
     issueDate: new Date("2026-05-21T10:30:00Z"),

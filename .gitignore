@@ -4,3 +4,4 @@ dist/
 sample-*.pdf
 *.tgz
 .DS_Store
+smoke-test.mjs
