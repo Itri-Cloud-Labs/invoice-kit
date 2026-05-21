@@ -48,8 +48,23 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check npm auth availability
+        id: auth_check
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
-        if: steps.version_check.outputs.exists == 'false'
+        if: steps.version_check.outputs.exists == 'false' && steps.auth_check.outputs.has_token == 'true'
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish skipped notice
+        if: steps.version_check.outputs.exists == 'false' && steps.auth_check.outputs.has_token != 'true'
+        run: |
+          echo "NPM_TOKEN is not configured. Skipping npm publish."
