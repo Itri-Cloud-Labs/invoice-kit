@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.1
+
+- Improve PDF pagination to avoid wasteful extra pages in common document layouts
+- Update publish automation to skip cleanly when npm auth is not configured
+
 ## 0.1.0
 
 - Initial release of `invoice-kit`
