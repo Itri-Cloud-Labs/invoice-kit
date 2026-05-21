@@ -1,4 +1,4 @@
-# invoice-kit
+# @ic-labs/invoice-kit
 
 TypeScript library for generating Moroccan business documents as PDFs.
 
@@ -32,13 +32,13 @@ It is designed for real business usage, not a demo. The package provides typed d
 ## Installation
 
 ```bash
-npm install invoice-kit
+npm install @ic-labs/invoice-kit
 ```
 
 ## Quick Start
 
 ```ts
-import { createInvoice } from "invoice-kit";
+import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
   number: "FAC-2026-0001",
@@ -84,7 +84,7 @@ import {
   createInvoice,
   createPurchaseOrder,
   createQuote
-} from "invoice-kit";
+} from "@ic-labs/invoice-kit";
 ```
 
 Each factory returns a `BusinessDocument` instance.
@@ -431,7 +431,7 @@ Delivery notes do not render:
 ### Invoice with international transfer info
 
 ```ts
-import { createInvoice } from "invoice-kit";
+import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
   number: "FAC-2026-0020",
@@ -468,7 +468,7 @@ const invoice = createInvoice({
 ### Quote with local bank details
 
 ```ts
-import { createQuote } from "invoice-kit";
+import { createQuote } from "@ic-labs/invoice-kit";
 
 const quote = createQuote({
   number: "DEV-2026-0012",
@@ -500,7 +500,7 @@ const quote = createQuote({
 ### Delivery note without pricing
 
 ```ts
-import { createDeliveryNote } from "invoice-kit";
+import { createDeliveryNote } from "@ic-labs/invoice-kit";
 
 const deliveryNote = createDeliveryNote({
   number: "BL-2026-0015",

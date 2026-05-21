@@ -194,7 +194,7 @@ export const renderDocumentPdf = async (
       Title: `${document.title} ${document.number}`,
       Author: document.seller.name,
       Subject: document.title,
-      Keywords: `${document.type}, morocco, invoice-kit`
+      Keywords: `${document.type}, morocco, @ic-labs/invoice-kit`
     }
   });
 
