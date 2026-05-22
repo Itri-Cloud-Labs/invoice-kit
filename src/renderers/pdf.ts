@@ -8,7 +8,7 @@ const PAGE = {
   width: 595.28,
   height: 841.89,
   footerOffset: 64,
-  headerTop: 48,
+  headerTop: 42,
   lineGap: 14
 };
 
@@ -112,6 +112,12 @@ const drawFixedText = (
   return y + doc.heightOfString(text, options);
 };
 
+const normalizeFooterText = (footer: string): string =>
+  footer
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .join("\n");
+
 const ensureSectionSpace = (doc: PDFKit.PDFDocument, y: number, requiredHeight: number): number => {
   const contentBottom = PAGE.height - PAGE.margin - 8;
 
@@ -136,24 +142,35 @@ const drawLabelValue = (
   return drawFixedText(doc, `${label}: ${value}`, x, y, { width, align });
 };
 
-const buildSellerLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
-  ...document.seller.addressLines,
-  [document.seller.city, document.seller.country].filter(Boolean).join(", "),
-  document.seller.phone ? `Tel: ${document.seller.phone}` : "",
-  document.seller.email ? `Email: ${document.seller.email}` : "",
-  document.seller.taxId ? `Tax ID: ${document.seller.taxId}` : "",
-  document.seller.ice ? `${labels.ice}: ${document.seller.ice}` : "",
-  document.seller.if ? `${labels.if}: ${document.seller.if}` : "",
-  document.seller.rc ? `${labels.rc}: ${document.seller.rc}` : ""
+const getWrappedRowHeight = (
+  doc: PDFKit.PDFDocument,
+  text: string,
+  width: number,
+  minHeight: number,
+  options: PDFKit.Mixins.TextOptions
+): number => {
+  const textHeight = doc.heightOfString(text, { ...options, width });
+  return Math.max(minHeight, Math.ceil(textHeight + 12));
+};
+
+const buildIssuerLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
+  ...document.issuer.addressLines,
+  [document.issuer.city, document.issuer.country].filter(Boolean).join(", "),
+  document.issuer.phone ? `Tel: ${document.issuer.phone}` : "",
+  document.issuer.email ? `Email: ${document.issuer.email}` : "",
+  document.issuer.taxId ? `${labels.if}: ${document.issuer.taxId}` : "",
+  document.issuer.ice ? `${labels.ice}: ${document.issuer.ice}` : "",
+  document.issuer.if ? `${labels.if}: ${document.issuer.if}` : "",
+  document.issuer.rc ? `${labels.rc}: ${document.issuer.rc}` : ""
 ].filter((line) => line.length > 0);
 
-const buildClientLines = (document: BusinessDocumentData): string[] => [
+const buildClientLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
   document.client.name,
   ...document.client.addressLines,
   [document.client.city, document.client.country].filter(Boolean).join(", "),
   document.client.phone ? `Tel: ${document.client.phone}` : "",
   document.client.email ? `Email: ${document.client.email}` : "",
-  document.client.taxId ? `Tax ID: ${document.client.taxId}` : ""
+  document.client.taxId ? `${labels.if}: ${document.client.taxId}` : ""
 ].filter((line) => line.length > 0);
 
 const buildBankLines = (bankInfo: BankInfo, labels: ReturnType<typeof getLabels>): string[] => {
@@ -182,6 +199,7 @@ export const renderDocumentPdf = async (
   const leftColumnX = PAGE.margin;
   const rightColumnX = PAGE.margin + 275;
   const columnWidth = 224;
+  const metaTopX = rightColumnX;
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
 
@@ -192,14 +210,14 @@ export const renderDocumentPdf = async (
     margin: PAGE.margin,
     info: {
       Title: `${document.title} ${document.number}`,
-      Author: document.seller.name,
+      Author: document.issuer.name,
       Subject: document.title,
       Keywords: `${document.type}, morocco, @ic-labs/invoice-kit`
     }
   });
 
   const pdfBytesPromise = collectPdf(doc);
-  const logoBuffer = document.logo ? await fetchLogo(document.logo) : null;
+  const logoBuffer = document.issuer.logo ? await fetchLogo(document.issuer.logo) : null;
 
   if (logoBuffer) {
     doc.image(logoBuffer, leftColumnX, PAGE.headerTop, {
@@ -208,17 +226,27 @@ export const renderDocumentPdf = async (
   }
 
   useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#173d73").fontSize(18);
-  drawFixedText(doc, document.seller.name, leftColumnX + (logoBuffer ? 84 : 0), PAGE.headerTop, {
-    width: logoBuffer ? 156 : 240,
+  doc.fillColor("#173d73").fontSize(17);
+  const issuerTextX = leftColumnX + (logoBuffer ? 84 : 0);
+  const issuerTextWidth = logoBuffer ? 156 : 240;
+  drawFixedText(doc, document.issuer.name, issuerTextX, PAGE.headerTop, {
+    width: issuerTextWidth,
     align
   });
+  const issuerLines = buildIssuerLines(document, labels);
+  useFont(doc, options?.fonts?.regular, "Helvetica");
+  doc.fillColor("#111827").fontSize(9);
+  const issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + 22, {
+    width: issuerTextWidth,
+    align,
+    lineGap: 1
+  });
 
-  const sellerLines = buildSellerLines(document, labels);
-  const clientLines = buildClientLines(document);
+  const clientLines = buildClientLines(document, labels);
+  const bankLines = !isDeliveryNote && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
 
   useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#111827").fontSize(22);
+  doc.fillColor("#111827").fontSize(20);
   const titleBottomY = drawFixedText(doc, document.title, rightColumnX, PAGE.headerTop, {
     width: columnWidth,
     align,
@@ -226,66 +254,48 @@ export const renderDocumentPdf = async (
   });
 
   useFont(doc, options?.fonts?.regular, "Helvetica");
-  doc.fillColor("#4b5563").fontSize(10);
-  drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + 6, {
+  doc.fillColor("#4b5563").fontSize(9);
+  const numberBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + 4, {
     width: columnWidth,
     align
   });
 
-  const headerBottomY = Math.max(titleBottomY + 22, PAGE.headerTop + 28);
-  const sectionsTopY = headerBottomY + 28;
+  let metaBottomY = numberBottomY;
+  metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, numberBottomY + 2, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align));
+  if (document.dueDate) {
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align));
+  }
+  if (!isDeliveryNote) {
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.currency, document.currency, columnWidth, align));
+  }
+
+  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, PAGE.headerTop + 48);
+  const sectionsTopY = headerBottomY + 10;
 
   useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#6b7280").fontSize(11);
-  drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
+  doc.fillColor("#6b7280").fontSize(10);
+  if (bankLines) {
+    drawFixedText(doc, labels.bankDetails, leftColumnX, sectionsTopY, { width: columnWidth, align });
+  }
   drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
 
   useFont(doc, options?.fonts?.regular, "Helvetica");
-  doc.fillColor("#111827").fontSize(10);
-  const sellerBottomY = drawFixedText(doc, [document.seller.name, ...sellerLines].join("\n"), leftColumnX, sectionsTopY + 18, {
+  doc.fillColor("#111827").fontSize(9);
+  const leftSectionBottomY = bankLines
+    ? drawFixedText(doc, bankLines.join("\n"), leftColumnX, sectionsTopY + 14, {
+        width: 270,
+        align,
+        lineGap: 1
+      })
+    : sectionsTopY;
+
+  const clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 14, {
     width: columnWidth,
     align,
-    lineGap: 2
+    lineGap: 1
   });
 
-  const clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 18, {
-    width: columnWidth,
-    align,
-    lineGap: 2
-  });
-
-  let y = Math.max(sellerBottomY, clientBottomY) + 20;
-
-  doc
-    .lineWidth(1)
-    .strokeColor("#d1d5db")
-    .rect(PAGE.margin, y, tableWidth, 44)
-    .stroke();
-
-  useFont(doc, options?.fonts?.regular, "Helvetica");
-  drawLabelValue(doc, PAGE.margin + 12, y + 14, labels.issueDate, formatDate(document.issueDate, document.locale), 145, align);
-
-  if (document.dueDate) {
-    drawLabelValue(doc, PAGE.margin + 170, y + 14, labels.dueDate, formatDate(document.dueDate, document.locale), 145, align);
-  }
-
-  if (!isDeliveryNote) {
-    drawLabelValue(doc, PAGE.margin + 328, y + 14, labels.currency, document.currency, 110, align);
-  }
-
-  y += 68;
-
-  if (!isDeliveryNote && document.bankInfo) {
-    const bankLines = buildBankLines(document.bankInfo, labels);
-    const bankHeight = 14 + doc.heightOfString(bankLines.join("\n"), { width: 270, align, lineGap: 2 }) + 18;
-    y = ensureSectionSpace(doc, y, bankHeight);
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-    doc.fillColor("#6b7280").fontSize(10);
-    drawFixedText(doc, labels.bankDetails, leftColumnX, y, { width: 240, align });
-    useFont(doc, options?.fonts?.regular, "Helvetica");
-    doc.fillColor("#111827").fontSize(10);
-    y = drawFixedText(doc, bankLines.join("\n"), leftColumnX, y + 14, { width: 270, align, lineGap: 2 }) + 18;
-  }
+  let y = Math.max(leftSectionBottomY, clientBottomY) + 10;
 
   doc.fillColor("#173d73").rect(tableX, y, tableWidth, 24).fill();
   useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
@@ -304,8 +314,9 @@ export const renderDocumentPdf = async (
     y += 24;
     useFont(doc, options?.fonts?.regular, "Helvetica");
     for (const item of document.items) {
-      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, 26).stroke();
       const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
+      const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
       doc.fillColor("#111827").fontSize(10);
       drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
         width: columns.itemWidth,
@@ -315,7 +326,7 @@ export const renderDocumentPdf = async (
         width: columns.quantityWidth,
         align: "right"
       });
-      y += 26;
+      y += rowHeight;
     }
   } else {
     const columns = {
@@ -338,12 +349,14 @@ export const renderDocumentPdf = async (
     y += 24;
     useFont(doc, options?.fonts?.regular, "Helvetica");
     for (const item of document.items) {
-      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, 26).stroke();
       const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
+      const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
       doc.fillColor("#111827").fontSize(10);
-      drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
+      drawFixedText(doc, itemLabel, columns.itemX, y + 8, {
         width: columns.itemWidth,
-        align
+        align,
+        lineGap: 1
       });
       drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
         width: columns.quantityWidth,
@@ -357,7 +370,7 @@ export const renderDocumentPdf = async (
         width: columns.amountWidth,
         align: "right"
       });
-      y += 26;
+      y += rowHeight;
     }
   }
 
@@ -373,10 +386,12 @@ export const renderDocumentPdf = async (
   }
 
   if (!isDeliveryNote) {
+    const totalsHeight = (24 * 5) + 12;
+    const notesWidth = tableWidth - 236;
     const notesHeight = notes.length > 0
-      ? 24 + 16 + doc.heightOfString(notes.join("\n"), { width: tableWidth, align, lineGap: 2 }) + 12
+      ? 12 + 12 + doc.heightOfString(notes.join("\n"), { width: notesWidth, align, lineGap: 1 }) + 8
       : 0;
-    y = ensureSectionSpace(doc, y + 12, (24 * 5) + 12 + notesHeight) - 12;
+    y = ensureSectionSpace(doc, y + 12, Math.max(totalsHeight, notesHeight)) - 12;
     const totalsX = PAGE.width - PAGE.margin - 220;
     const totals = [
       [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency)],
@@ -387,6 +402,21 @@ export const renderDocumentPdf = async (
     ] as const;
 
     y += 12;
+    let trailingBottomY = y;
+
+    if (notes.length > 0) {
+      useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+      doc.fillColor("#6b7280").fontSize(10);
+      drawFixedText(doc, labels.notes, PAGE.margin, y, { width: notesWidth, align });
+      useFont(doc, options?.fonts?.regular, "Helvetica");
+      doc.fillColor("#111827").fontSize(9);
+      trailingBottomY = drawFixedText(doc, notes.join("\n"), PAGE.margin, y + 12, {
+        width: notesWidth,
+        align,
+        lineGap: 1
+      });
+    }
+
     totals.forEach(([label, value], index) => {
       const isTotal = index === totals.length - 1;
       doc.fillColor(isTotal ? "#173d73" : "white").rect(totalsX, y, 220, 24).fill();
@@ -398,25 +428,31 @@ export const renderDocumentPdf = async (
       drawFixedText(doc, truncateText(doc, value, 85), totalsX + 125, y + 7, { width: 85, align: "right" });
       y += 24;
     });
-  }
-
-  if (notes.length > 0) {
-    y += 24;
+    y = Math.max(y, trailingBottomY + 8);
+  } else if (notes.length > 0) {
+    const notesHeight = 12 + 12 + doc.heightOfString(notes.join("\n"), { width: tableWidth, align, lineGap: 1 }) + 8;
+    y = ensureSectionSpace(doc, y + 12, notesHeight) - 12;
+    y += 12;
     useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-    doc.fillColor("#6b7280").fontSize(11);
+    doc.fillColor("#6b7280").fontSize(10);
     drawFixedText(doc, labels.notes, PAGE.margin, y, { width: tableWidth, align });
     useFont(doc, options?.fonts?.regular, "Helvetica");
-    doc.fillColor("#111827").fontSize(10);
-    drawFixedText(doc, notes.join("\n"), PAGE.margin, y + 16, { width: tableWidth, align, lineGap: 2 });
+    doc.fillColor("#111827").fontSize(9);
+    drawFixedText(doc, notes.join("\n"), PAGE.margin, y + 12, { width: tableWidth, align, lineGap: 1 });
   }
 
   useFont(doc, options?.fonts?.regular, "Helvetica");
   const actualPageHeight = doc.page.height ?? 841.89;
-  doc.fillColor("#9ca3af").fontSize(8);
-  drawFixedText(doc, `${document.title} ${document.number}`, PAGE.margin, actualPageHeight - PAGE.footerOffset, {
+  const footerText = normalizeFooterText(document.footer ?? `${document.title} ${document.number}`);
+  const footerOptions = {
     width: tableWidth,
-    align: isArabic ? "right" : "left"
-  });
+    align: "center" as const,
+    lineGap: 1
+  };
+  const footerHeight = doc.heightOfString(footerText, footerOptions);
+  doc.page.margins.bottom = 0;
+  doc.fillColor("#9ca3af").fontSize(8);
+  drawFixedText(doc, footerText, PAGE.margin, actualPageHeight - footerHeight, footerOptions);
 
   doc.end();
   return pdfBytesPromise;

@@ -1,4 +1,4 @@
-import type { BankInfo, CreateDocumentOptions, DiscountInput, LineItemInput, Party } from "./types.js";
+import type { BankInfo, CreateDocumentOptions, DiscountInput, Issuer, LineItemInput, Party } from "./types.js";
 
 const assertNonEmptyString = (value: string, field: string): void => {
   if (value.trim().length === 0) {
@@ -21,6 +21,23 @@ const validateParty = (party: Party, field: string): void => {
 
   for (const [index, line] of party.addressLines.entries()) {
     assertNonEmptyString(line, `${field}.addressLines[${index}]`);
+  }
+};
+
+const validateIssuer = (issuer: Issuer): void => {
+  validateParty(issuer, "issuer");
+
+  if (issuer.logo !== undefined) {
+    assertNonEmptyString(issuer.logo, "issuer.logo");
+
+    try {
+      const url = new URL(issuer.logo);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error("invalid protocol");
+      }
+    } catch {
+      throw new Error("issuer.logo must be a valid http or https URL.");
+    }
   }
 };
 
@@ -75,21 +92,7 @@ export const validateDocumentInput = (input: CreateDocumentOptions): void => {
   const requiresPricing = input.type !== "deliveryNote";
 
   assertNonEmptyString(input.number, "number");
-
-  if (input.logo !== undefined) {
-    assertNonEmptyString(input.logo, "logo");
-
-    try {
-      const url = new URL(input.logo);
-      if (url.protocol !== "http:" && url.protocol !== "https:") {
-        throw new Error("invalid protocol");
-      }
-    } catch {
-      throw new Error("logo must be a valid http or https URL.");
-    }
-  }
-
-  validateParty(input.seller, "seller");
+  validateIssuer(input.issuer);
   validateParty(input.client, "client");
 
   if (input.items.length === 0) {
@@ -113,6 +116,10 @@ export const validateDocumentInput = (input: CreateDocumentOptions): void => {
 
   if (input.currency !== undefined) {
     assertNonEmptyString(input.currency, "currency");
+  }
+
+  if (input.footer !== undefined) {
+    assertNonEmptyString(input.footer, "footer");
   }
 
   if (input.bankInfo) {

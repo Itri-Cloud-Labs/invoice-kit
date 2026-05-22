@@ -47,12 +47,12 @@ const startLogoServer = async () => {
   };
 };
 
-const {logoUrl, close} = await startLogoServer()
-
+const { close, logoUrl } = await startLogoServer();
 
 try {
-  const seller = {
+  const baseIssuer = {
     name: "IC Labs SARL",
+    logo: logoUrl,
     addressLines: ["201 Boulevard Zerktouni", "5eme etage"],
     city: "Casablanca",
     country: "Maroc",
@@ -76,14 +76,13 @@ try {
 
   const invoice = createInvoice({
     number: "FAC-2026-0001",
-    logo: logoUrl,
-    title: "Facture de services et accompagnement comptable premium avec suivi trimestriel detaille",
+    title: "Facture ",
     locale: "fr-MA",
     issueDate: new Date("2026-05-20T09:00:00Z"),
     dueDate: new Date("2026-06-19T09:00:00Z"),
     currency: "MAD",
     vatRate: 0.2,
-    seller,
+    issuer: baseIssuer,
     client,
     items: [
       {
@@ -96,7 +95,7 @@ try {
       },
       {
         name: "Implementation ERP multi-societes",
-        description: "Phase 1 de parametrage et accompagnement utilisateurs clefs",
+        description: "Phase 1 de parametrage, accompagnement utilisateurs clefs, reprise des donnees et documentation operationnelle detaillee pour les equipes finance et support",
         quantity: 2,
         price: 1800,
         unit: "jour",
@@ -112,6 +111,7 @@ try {
       dueDate: new Date("2026-06-19T09:00:00Z"),
       notes: "Virement bancaire sur reception de facture."
     },
+    footer: "IC Labs SARL\n+212 6 00 00 00 00\ncontact@iclabs.ma",
     bankInfo: {
       type: "international",
       bankName: "BMCI Corporate",
@@ -124,14 +124,13 @@ try {
 
   const quote = createQuote({
     number: "DEV-2026-0012",
-    logo: "https://thispersondoesnotexist.com",
-    title: "Proposition commerciale de cadrage et deploiement",
+    title: "Proposition commerciale ",
     locale: "fr-MA",
     issueDate: new Date("2026-05-21T10:30:00Z"),
     dueDate: new Date("2026-05-31T10:30:00Z"),
     currency: "MAD",
     vatRate: 0.2,
-    seller,
+    issuer: baseIssuer,
     client: {
       ...client,
       name: "Noxel SAS",
@@ -154,6 +153,7 @@ try {
       dueDate: new Date("2026-05-31T10:30:00Z"),
       notes: "Validite du devis: 10 jours."
     },
+    footer: "IC Labs SARL\nwww.iclabs.ma",
     bankInfo: {
       type: "local",
       bankName: "Attijariwafa Bank",
@@ -165,14 +165,13 @@ try {
 
   const purchaseOrder = createPurchaseOrder({
     number: "BDC-2026-0004",
-    logo: logoUrl,
-    title: "Bon de commande interne pour equipement bureautique et materiel informatique longue designation",
+    title: "Bon de commande ",
     locale: "fr-MA",
     issueDate: new Date("2026-05-22T08:15:00Z"),
     dueDate: new Date("2026-06-05T08:15:00Z"),
     currency: "MAD",
     vatRate: 0.2,
-    seller,
+    issuer: baseIssuer,
     client: {
       ...client,
       name: "Fournisseur Equipement Pro",
@@ -182,7 +181,7 @@ try {
     items: [
       {
         name: "Ordinateur portable",
-        description: "16Go RAM / 512Go SSD / garantie 3 ans sur site",
+        description: "16Go RAM / 512Go SSD / garantie 3 ans sur site / configuration standardisee pour les equipes projet et deploiement terrain",
         quantity: 4,
         price: 9500,
         unit: "unite",
@@ -203,6 +202,7 @@ try {
       dueDate: new Date("2026-07-06T08:15:00Z"),
       notes: "Livraison au siege de Casablanca."
     },
+    footer: "Service achats IC Labs\nCasablanca - Maroc",
     bankInfo: {
       type: "local",
       bankName: "Banque Populaire",
@@ -214,19 +214,18 @@ try {
 
   const deliveryNote = createDeliveryNote({
     number: "BL-2026-0015",
-    logo: logoUrl,
-    title: "Bon de livraison chantier avec designation exceptionnellement longue pour verifier le rendu du titre",
+    title: "Bon de livraison ",
     locale: "fr-MA",
     issueDate: new Date("2026-05-23T07:45:00Z"),
     dueDate: new Date("2026-05-23T17:00:00Z"),
     currency: "MAD",
     vatRate: 0.2,
-    seller,
+    issuer: baseIssuer,
     client,
     items: [
       {
         name: "Laptop",
-        description: "Serie A-445 configuration chantier",
+        description: "Serie A-445 configuration chantier avec accessoires et etiquetage inventaire",
         quantity: 2,
         unit: "piece"
       },
@@ -246,6 +245,7 @@ try {
       dueDate: new Date("2026-05-24T12:00:00Z"),
       notes: "This should not appear in the delivery note PDF."
     },
+    footer: "Reception marchandise\nSignature et cachet",
     bankInfo: {
       type: "international",
       bankName: "Ignored Bank",

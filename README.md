@@ -27,6 +27,7 @@ It is designed for real business usage, not a demo. The package provides typed d
   - local transfer: bank name, holder name, RIB
   - international transfer: bank name, holder name, SWIFT, IBAN
 - Remote logo URL support in PDF headers
+- Optional multiline footer rendered at the extreme bottom of the page
 - Delivery notes rendered without pricing information
 
 ## Installation
@@ -42,9 +43,9 @@ import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
   number: "FAC-2026-0001",
-  logo: "https://example.com/assets/logo.png",
-  seller: {
+  issuer: {
     name: "IC Labs SARL",
+    logo: "https://example.com/assets/logo.png",
     addressLines: ["Casablanca, Maroc"],
     ice: "001234567890123",
     if: "12345678",
@@ -65,6 +66,7 @@ const invoice = createInvoice({
   paymentTerms: {
     label: "Paiement sous 30 jours"
   },
+  footer: "IC Labs SARL\ncontact@iclabs.ma\n+212600000000",
   bankInfo: {
     type: "local",
     bankName: "Attijariwafa Bank",
@@ -143,23 +145,44 @@ All document factories accept a typed object shaped like `DocumentInput`.
 ### Required fields
 
 - `number: string`
-- `seller: Party`
+- `issuer: Issuer`
 - `client: Party`
 - `items: LineItemInput[]`
 
 ### Common optional fields
 
-- `logo?: string`
 - `issueDate?: Date`
 - `dueDate?: Date`
 - `currency?: string`
 - `vatRate?: number`
 - `discounts?: DiscountInput[]`
 - `notes?: string`
+- `footer?: string`
 - `paymentTerms?: PaymentTerms`
 - `bankInfo?: BankInfo`
 - `locale?: "fr-MA" | "ar-MA"`
 - `title?: string`
+
+### `footer`
+
+- `footer` is an optional string rendered centered at the extreme bottom of the PDF
+- multiline strings are supported with `\n`
+- when multiple lines are provided, rendering starts higher so the last line ends at the bottom edge
+- if `footer` is omitted, the PDF falls back to the document title and number in the footer area
+
+### `Issuer`
+
+```ts
+interface Issuer extends Party {
+  logo?: string;
+}
+```
+
+`issuer` is the document emitter and the source of header branding.
+
+- `issuer.logo` is the logo rendered in the PDF header
+- `issuer.name` is rendered in the issuer block
+- issuer address and business identifiers render directly below the issuer name
 
 ### `Party`
 
@@ -181,7 +204,7 @@ interface Party {
 Notes:
 
 - `addressLines` must contain at least one line
-- seller identifiers `ICE`, `IF`, and `RC` are rendered directly inside seller details
+- issuer identifiers `ICE`, `IF`, and `RC` are rendered directly inside issuer details
 
 ### `LineItemInput`
 
@@ -293,7 +316,7 @@ The package is tailored for Morocco:
 
 - `MAD` default currency
 - `TVA` terminology
-- seller company fields:
+- issuer company fields:
   - `ICE`
   - `IF`
   - `RC`
@@ -314,7 +337,7 @@ Example:
 const quote = createQuote({
   number: "DEV-2026-0012",
   locale: "ar-MA",
-  seller: {
+  issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]
   },
@@ -344,15 +367,19 @@ Without custom fonts, Arabic glyph rendering is not reliable in PDF output.
 
 ## Remote Logo Support
 
-You can pass a remote image URL through `logo`.
+You can pass a remote image URL through `issuer.logo`.
 
 ```ts
-logo: "https://example.com/assets/logo.png"
+issuer: {
+  name: "IC Labs SARL",
+  logo: "https://example.com/assets/logo.png",
+  addressLines: ["Casablanca"]
+}
 ```
 
 Behavior:
 
-- the library fetches the image itself during `toPDF()`
+- the library fetches `issuer.logo` itself during `toPDF()`
 - the user only provides the URL
 - the logo is rendered in the document header
 
@@ -378,15 +405,15 @@ The library validates document input before building the document model.
 Examples of enforced rules:
 
 - `number` must be present
-- seller and client names must be non-empty
-- seller and client must have at least one address line
+- issuer and client names must be non-empty
+- issuer and client must have at least one address line
 - `items` must contain at least one line item
 - quantity must be greater than zero
 - financial documents require `unitPrice` or `price`
 - negative prices are rejected
 - negative discounts are rejected
 - `vatRate` must be between `0` and `1`
-- `logo` must be a valid `http` or `https` URL
+- `issuer.logo` must be a valid `http` or `https` URL
 - bank fields must be present according to bank mode
 
 ## Rendering Behavior
@@ -395,7 +422,7 @@ Examples of enforced rules:
 
 Invoices, quotes, and purchase orders render:
 
-- seller block
+- issuer block
 - client block
 - issue/due date
 - currency
@@ -404,16 +431,18 @@ Invoices, quotes, and purchase orders render:
 - payment terms
 - bank details
 - notes
+- footer
 
 ### Delivery notes
 
 Delivery notes render:
 
-- seller block
+- issuer block
 - client block
 - issue/due date
 - item table with designation and quantity only
 - notes
+- footer
 
 Delivery notes do not render:
 
@@ -435,7 +464,7 @@ import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
   number: "FAC-2026-0020",
-  seller: {
+  issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"],
     ice: "001234567890123",
@@ -455,6 +484,7 @@ const invoice = createInvoice({
     }
   ],
   vatRate: 0.2,
+  footer: "IC Labs SARL\ncontact@iclabs.ma",
   bankInfo: {
     type: "international",
     bankName: "BMCI Corporate",
@@ -472,7 +502,7 @@ import { createQuote } from "@ic-labs/invoice-kit";
 
 const quote = createQuote({
   number: "DEV-2026-0012",
-  seller: {
+  issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]
   },
@@ -488,6 +518,7 @@ const quote = createQuote({
     }
   ],
   discounts: [{ type: "percentage", value: 0.05, label: "Remise devis" }],
+  footer: "Validite 15 jours\nwww.iclabs.ma",
   bankInfo: {
     type: "local",
     bankName: "Attijariwafa Bank",
@@ -504,7 +535,7 @@ import { createDeliveryNote } from "@ic-labs/invoice-kit";
 
 const deliveryNote = createDeliveryNote({
   number: "BL-2026-0015",
-  seller: {
+  issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]
   },
@@ -516,7 +547,8 @@ const deliveryNote = createDeliveryNote({
     { name: "Laptop", quantity: 2, unit: "piece" },
     { name: "Mouse", quantity: 3, unit: "piece" }
   ],
-  notes: "Marchandise remise au responsable du site."
+  notes: "Marchandise remise au responsable du site.",
+  footer: "Reception marchandise\nSignature et cachet"
 });
 ```
 

@@ -15,6 +15,10 @@ export interface Party {
   rc?: string;
 }
 
+export interface Issuer extends Party {
+  logo?: string;
+}
+
 export interface LineItemInput {
   name: string;
   description?: string;
@@ -63,8 +67,7 @@ export type BankInfo = LocalBankInfo | InternationalBankInfo;
 
 export interface DocumentInput {
   number: string;
-  logo?: string;
-  seller: Party;
+  issuer: Issuer;
   client: Party;
   items: LineItemInput[];
   issueDate?: Date;
@@ -73,6 +76,7 @@ export interface DocumentInput {
   vatRate?: number;
   discounts?: DiscountInput[];
   notes?: string;
+  footer?: string;
   paymentTerms?: PaymentTerms;
   bankInfo?: BankInfo;
   locale?: LocaleCode;
@@ -91,10 +95,9 @@ export interface BusinessDocumentData {
   type: DocumentType;
   title: string;
   number: string;
-  logo?: string;
   issueDate: Date;
   dueDate?: Date;
-  seller: Party;
+  issuer: Issuer;
   client: Party;
   items: LineItem[];
   currency: string;
@@ -103,6 +106,7 @@ export interface BusinessDocumentData {
   paymentTerms?: PaymentTerms;
   bankInfo?: BankInfo;
   notes?: string;
+  footer?: string;
   locale: LocaleCode;
   totals: DocumentTotals;
 }

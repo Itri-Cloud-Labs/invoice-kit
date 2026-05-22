@@ -20,9 +20,8 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
     type: options.type,
     title: options.title ?? template.getTitle(locale) ?? labels.documentTitle,
     number: options.number,
-    ...(options.logo ? { logo: options.logo } : {}),
     issueDate,
-    seller: options.seller,
+    issuer: options.issuer,
     client: options.client,
     items,
     currency: options.currency ?? "MAD",
@@ -37,7 +36,8 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
     ...(options.dueDate ? { dueDate: options.dueDate } : {}),
     ...(options.paymentTerms ? { paymentTerms: options.paymentTerms } : {}),
     ...(options.bankInfo ? { bankInfo: options.bankInfo } : {}),
-    ...(options.notes ? { notes: options.notes } : {})
+    ...(options.notes ? { notes: options.notes } : {}),
+    ...(options.footer ? { footer: options.footer } : {})
   });
 };
 
