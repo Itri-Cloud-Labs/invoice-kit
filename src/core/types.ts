@@ -3,8 +3,8 @@ export type DocumentType = "invoice" | "quote" | "purchaseOrder" | "deliveryNote
 export type LocaleCode = "fr-MA" | "ar-MA";
 
 export interface Party {
-  name: string;
-  addressLines: string[];
+  name?: string;
+  addressLines?: string[];
   email?: string;
   phone?: string;
   city?: string;
@@ -66,11 +66,11 @@ export interface InternationalBankInfo {
 export type BankInfo = LocalBankInfo | InternationalBankInfo;
 
 export interface DocumentInput {
-  number: string;
-  issuer: Issuer;
-  seller: Party;
-  client: Party;
-  items: LineItemInput[];
+  number?: string;
+  issuer?: Issuer;
+  seller?: Party;
+  client?: Party;
+  items?: LineItemInput[];
   issueDate?: Date;
   dueDate?: Date;
   currency?: string;
@@ -94,23 +94,23 @@ export interface DocumentTotals {
 
 export interface BusinessDocumentData {
   type: DocumentType;
-  title: string;
-  number: string;
-  issueDate: Date;
+  title?: string;
+  number?: string;
+  issueDate?: Date;
   dueDate?: Date;
-  issuer: Issuer;
-  seller: Party;
-  client: Party;
-  items: LineItem[];
-  currency: string;
-  vatRate: number;
-  discounts: DiscountInput[];
+  issuer?: Issuer;
+  seller?: Party;
+  client?: Party;
+  items?: LineItem[];
+  currency?: string;
+  vatRate?: number;
+  discounts?: DiscountInput[];
   paymentTerms?: PaymentTerms;
   bankInfo?: BankInfo;
   notes?: string;
   footer?: string;
   locale: LocaleCode;
-  totals: DocumentTotals;
+  totals?: DocumentTotals;
 }
 
 export interface PdfRenderOptions {

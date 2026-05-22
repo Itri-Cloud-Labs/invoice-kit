@@ -1,5 +1,5 @@
 import PDFDocument from "pdfkit";
-import type { BankInfo, BusinessDocumentData, PdfRenderOptions } from "../core/types.js";
+import type { BankInfo, BusinessDocumentData, Party, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
 import { formatDate, formatMoney } from "../utils/formatting.js";
 
@@ -153,37 +153,23 @@ const getWrappedRowHeight = (
   return Math.max(minHeight, Math.ceil(textHeight + 12));
 };
 
-const buildIssuerLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
-  ...document.issuer.addressLines,
-  [document.issuer.city, document.issuer.country].filter(Boolean).join(", "),
-  document.issuer.phone ? `Tel: ${document.issuer.phone}` : "",
-  document.issuer.email ? `Email: ${document.issuer.email}` : "",
-  document.issuer.taxId ? `${labels.if}: ${document.issuer.taxId}` : "",
-  document.issuer.ice ? `${labels.ice}: ${document.issuer.ice}` : "",
-  document.issuer.if ? `${labels.if}: ${document.issuer.if}` : "",
-  document.issuer.rc ? `${labels.rc}: ${document.issuer.rc}` : ""
-].filter((line) => line.length > 0);
+const buildPartyLines = (party: Party | undefined, labels: ReturnType<typeof getLabels>, includeName = true): string[] => {
+  if (!party) {
+    return [];
+  }
 
-const buildSellerLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
-  document.seller.name,
-  ...document.seller.addressLines,
-  [document.seller.city, document.seller.country].filter(Boolean).join(", "),
-  document.seller.phone ? `Tel: ${document.seller.phone}` : "",
-  document.seller.email ? `Email: ${document.seller.email}` : "",
-  document.seller.taxId ? `${labels.if}: ${document.seller.taxId}` : "",
-  document.seller.ice ? `${labels.ice}: ${document.seller.ice}` : "",
-  document.seller.if ? `${labels.if}: ${document.seller.if}` : "",
-  document.seller.rc ? `${labels.rc}: ${document.seller.rc}` : ""
-].filter((line) => line.length > 0);
-
-const buildClientLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
-  document.client.name,
-  ...document.client.addressLines,
-  [document.client.city, document.client.country].filter(Boolean).join(", "),
-  document.client.phone ? `Tel: ${document.client.phone}` : "",
-  document.client.email ? `Email: ${document.client.email}` : "",
-  document.client.taxId ? `${labels.if}: ${document.client.taxId}` : ""
-].filter((line) => line.length > 0);
+  return [
+    includeName ? (party.name ?? "") : "",
+    ...(party.addressLines ?? []),
+    [party.city, party.country].filter(Boolean).join(", "),
+    party.phone ? `Tel: ${party.phone}` : "",
+    party.email ? `Email: ${party.email}` : "",
+    party.taxId ? `${labels.if}: ${party.taxId}` : "",
+    party.ice ? `${labels.ice}: ${party.ice}` : "",
+    party.if ? `${labels.if}: ${party.if}` : "",
+    party.rc ? `${labels.rc}: ${party.rc}` : ""
+  ].filter((line) => line.length > 0);
+};
 
 const buildBankLines = (bankInfo: BankInfo, labels: ReturnType<typeof getLabels>): string[] => {
   const baseLines = [
@@ -221,15 +207,15 @@ export const renderDocumentPdf = async (
     size: "A4",
     margin: PAGE.margin,
     info: {
-      Title: `${document.title} ${document.number}`,
-      Author: document.issuer.name,
-      Subject: document.title,
+      Title: [document.title, document.number].filter(Boolean).join(" "),
+      Author: document.issuer?.name ?? document.seller?.name ?? "",
+      Subject: document.title ?? "",
       Keywords: `${document.type}, morocco, @ic-labs/invoice-kit`
     }
   });
 
   const pdfBytesPromise = collectPdf(doc);
-  const logoBuffer = document.issuer.logo ? await fetchLogo(document.issuer.logo) : null;
+  const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
 
   if (logoBuffer) {
     doc.image(logoBuffer, leftColumnX, PAGE.headerTop, {
@@ -237,162 +223,195 @@ export const renderDocumentPdf = async (
     });
   }
 
-  useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#173d73").fontSize(17);
   const issuerTextX = leftColumnX + (logoBuffer ? 84 : 0);
   const issuerTextWidth = logoBuffer ? 156 : 240;
-  drawFixedText(doc, document.issuer.name, issuerTextX, PAGE.headerTop, {
-    width: issuerTextWidth,
-    align
-  });
-  const issuerLines = buildIssuerLines(document, labels);
-  useFont(doc, options?.fonts?.regular, "Helvetica");
-  doc.fillColor("#111827").fontSize(9);
-  const issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + 22, {
-    width: issuerTextWidth,
-    align,
-    lineGap: 1
-  });
+  let issuerHeaderBottomY = PAGE.headerTop;
+  const issuerName = document.issuer?.name;
+  const issuerLines = buildPartyLines(document.issuer, labels, false);
 
-  const sellerLines = buildSellerLines(document, labels);
-  const clientLines = buildClientLines(document, labels);
-  const bankLines = !isDeliveryNote && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
-
-  useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#111827").fontSize(20);
-  const titleBottomY = drawFixedText(doc, document.title, rightColumnX, PAGE.headerTop, {
-    width: columnWidth,
-    align,
-    lineBreak: true
-  });
-
-  useFont(doc, options?.fonts?.regular, "Helvetica");
-  doc.fillColor("#4b5563").fontSize(9);
-  const numberBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + 4, {
-    width: columnWidth,
-    align
-  });
-
-  let metaBottomY = numberBottomY;
-  metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, numberBottomY + 2, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align));
-  if (document.dueDate) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align));
-  }
-  if (!isDeliveryNote) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.currency, document.currency, columnWidth, align));
-  }
-
-  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, PAGE.headerTop + 48);
-  const sectionsTopY = headerBottomY + 10;
-
-  useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  doc.fillColor("#6b7280").fontSize(10);
-  drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
-  drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
-
-  useFont(doc, options?.fonts?.regular, "Helvetica");
-  doc.fillColor("#111827").fontSize(9);
-  let leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + 14, {
-    width: 270,
-    align,
-    lineGap: 1
-  });
-
-  if (bankLines) {
+  if (issuerName) {
     useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-    doc.fillColor("#6b7280").fontSize(9);
-    drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + 8, { width: columnWidth, align });
+    doc.fillColor("#173d73").fontSize(17);
+    drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop, {
+      width: issuerTextWidth,
+      align
+    });
+    issuerHeaderBottomY = PAGE.headerTop + 20;
+  }
+
+  if (issuerLines.length > 0) {
     useFont(doc, options?.fonts?.regular, "Helvetica");
     doc.fillColor("#111827").fontSize(9);
-    leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + 20, {
-      width: 270,
+    issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + (issuerName ? 22 : 0), {
+      width: issuerTextWidth,
       align,
       lineGap: 1
     });
   }
 
-  const clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 14, {
-    width: columnWidth,
-    align,
-    lineGap: 1
-  });
+  const sellerLines = buildPartyLines(document.seller, labels);
+  const clientLines = buildPartyLines(document.client, labels);
+  const bankLines = !isDeliveryNote && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
 
-  let y = Math.max(leftSectionBottomY, clientBottomY) + 10;
+  let titleBottomY = PAGE.headerTop;
+  if (document.title) {
+    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    doc.fillColor("#111827").fontSize(20);
+    titleBottomY = drawFixedText(doc, document.title, rightColumnX, PAGE.headerTop, {
+      width: columnWidth,
+      align,
+      lineBreak: true
+    });
+  }
 
-  doc.fillColor("#173d73").rect(tableX, y, tableWidth, 24).fill();
-  useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
-  if (isDeliveryNote) {
-    const columns = {
-      itemX: tableX + 12,
-      itemWidth: 350,
-      quantityX: tableX + 400,
-      quantityWidth: 50
-    };
-
-    doc.fillColor("white").fontSize(10);
-    drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
-    drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
-
-    y += 24;
+  let metaBottomY = titleBottomY;
+  if (document.number) {
     useFont(doc, options?.fonts?.regular, "Helvetica");
-    for (const item of document.items) {
-      const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-      const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
-      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
-      doc.fillColor("#111827").fontSize(10);
-      drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
-        width: columns.itemWidth,
-        align
-      });
-      drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
-        width: columns.quantityWidth,
-        align: "right"
-      });
-      y += rowHeight;
+    doc.fillColor("#4b5563").fontSize(9);
+    metaBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + (document.title ? 4 : 0), {
+      width: columnWidth,
+      align
+    });
+  }
+
+  if (document.issueDate) {
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align));
+  }
+  if (document.dueDate) {
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align));
+  }
+  if (!isDeliveryNote && document.currency) {
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.currency, document.currency, columnWidth, align));
+  }
+
+  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, PAGE.headerTop + 48);
+  let y = headerBottomY + 10;
+  if (sellerLines.length > 0 || clientLines.length > 0 || bankLines) {
+    const sectionsTopY = headerBottomY + 10;
+
+    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    doc.fillColor("#6b7280").fontSize(10);
+    if (sellerLines.length > 0) {
+      drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
     }
-  } else {
-    const columns = {
-      itemX: tableX + 12,
-      itemWidth: 220,
-      quantityX: tableX + 240,
-      quantityWidth: 45,
-      unitPriceX: tableX + 300,
-      unitPriceWidth: 78,
-      amountX: tableX + 392,
-      amountWidth: 95
-    };
+    if (clientLines.length > 0) {
+      drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
+    }
 
-    doc.fillColor("white").fontSize(10);
-    drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
-    drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
-    drawFixedText(doc, labels.unitPrice, columns.unitPriceX, y + 7, { width: columns.unitPriceWidth, align: "right" });
-    drawFixedText(doc, labels.amount, columns.amountX, y + 7, { width: columns.amountWidth, align: "right" });
-
-    y += 24;
     useFont(doc, options?.fonts?.regular, "Helvetica");
-    for (const item of document.items) {
-      const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-      const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
-      doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
-      doc.fillColor("#111827").fontSize(10);
-      drawFixedText(doc, itemLabel, columns.itemX, y + 8, {
-        width: columns.itemWidth,
+    doc.fillColor("#111827").fontSize(9);
+    let leftSectionBottomY = sectionsTopY;
+    if (sellerLines.length > 0) {
+      leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + 14, {
+        width: 270,
         align,
         lineGap: 1
       });
-      drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
-        width: columns.quantityWidth,
-        align: "right"
+    }
+
+    if (bankLines) {
+      useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+      doc.fillColor("#6b7280").fontSize(9);
+      drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + 8, { width: columnWidth, align });
+      useFont(doc, options?.fonts?.regular, "Helvetica");
+      doc.fillColor("#111827").fontSize(9);
+      leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + 20, {
+        width: 270,
+        align,
+        lineGap: 1
       });
-      drawFixedText(doc, truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency), columns.unitPriceWidth), columns.unitPriceX, y + 8, {
-        width: columns.unitPriceWidth,
-        align: "right"
+    }
+
+    let clientBottomY = sectionsTopY;
+    if (clientLines.length > 0) {
+      clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 14, {
+        width: columnWidth,
+        align,
+        lineGap: 1
       });
-      drawFixedText(doc, truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency), columns.amountWidth), columns.amountX, y + 8, {
-        width: columns.amountWidth,
-        align: "right"
-      });
-      y += rowHeight;
+    }
+
+    y = Math.max(leftSectionBottomY, clientBottomY) + 10;
+  }
+
+  const items = document.items ?? [];
+  const hasItems = items.length > 0;
+  if (hasItems) {
+    doc.fillColor("#173d73").rect(tableX, y, tableWidth, 24).fill();
+    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    if (isDeliveryNote) {
+      const columns = {
+        itemX: tableX + 12,
+        itemWidth: 350,
+        quantityX: tableX + 400,
+        quantityWidth: 50
+      };
+
+      doc.fillColor("white").fontSize(10);
+      drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
+      drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
+
+      y += 24;
+      useFont(doc, options?.fonts?.regular, "Helvetica");
+      for (const item of items) {
+        const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
+        const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+        doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
+        doc.fillColor("#111827").fontSize(10);
+        drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
+          width: columns.itemWidth,
+          align
+        });
+        drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
+          width: columns.quantityWidth,
+          align: "right"
+        });
+        y += rowHeight;
+      }
+    } else {
+      const columns = {
+        itemX: tableX + 12,
+        itemWidth: 220,
+        quantityX: tableX + 240,
+        quantityWidth: 45,
+        unitPriceX: tableX + 300,
+        unitPriceWidth: 78,
+        amountX: tableX + 392,
+        amountWidth: 95
+      };
+
+      doc.fillColor("white").fontSize(10);
+      drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
+      drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
+      drawFixedText(doc, labels.unitPrice, columns.unitPriceX, y + 7, { width: columns.unitPriceWidth, align: "right" });
+      drawFixedText(doc, labels.amount, columns.amountX, y + 7, { width: columns.amountWidth, align: "right" });
+
+      y += 24;
+      useFont(doc, options?.fonts?.regular, "Helvetica");
+      for (const item of items) {
+        const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
+        const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+        doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
+        doc.fillColor("#111827").fontSize(10);
+        drawFixedText(doc, itemLabel, columns.itemX, y + 8, {
+          width: columns.itemWidth,
+          align,
+          lineGap: 1
+        });
+        drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
+          width: columns.quantityWidth,
+          align: "right"
+        });
+        drawFixedText(doc, truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth), columns.unitPriceX, y + 8, {
+          width: columns.unitPriceWidth,
+          align: "right"
+        });
+        drawFixedText(doc, truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency ?? "MAD"), columns.amountWidth), columns.amountX, y + 8, {
+          width: columns.amountWidth,
+          align: "right"
+        });
+        y += rowHeight;
+      }
     }
   }
 
@@ -407,7 +426,7 @@ export const renderDocumentPdf = async (
     notes.push(`${labels.notes}: ${document.notes}`);
   }
 
-  if (!isDeliveryNote) {
+  if (!isDeliveryNote && document.totals) {
     const totalsHeight = (24 * 5) + 12;
     const notesWidth = tableWidth - 236;
     const notesHeight = notes.length > 0
@@ -416,11 +435,11 @@ export const renderDocumentPdf = async (
     y = ensureSectionSpace(doc, y + 12, Math.max(totalsHeight, notesHeight)) - 12;
     const totalsX = PAGE.width - PAGE.margin - 220;
     const totals = [
-      [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency)],
-      [labels.discount, formatMoney(document.totals.discountTotal, document.locale, document.currency)],
-      [labels.taxableBase, formatMoney(document.totals.taxableBase, document.locale, document.currency)],
-      [`${labels.vat} (${(document.vatRate * 100).toFixed(0)}%)`, formatMoney(document.totals.vatAmount, document.locale, document.currency)],
-      [labels.total, formatMoney(document.totals.total, document.locale, document.currency)]
+      [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency ?? "MAD")],
+      [labels.discount, formatMoney(document.totals.discountTotal, document.locale, document.currency ?? "MAD")],
+      [labels.taxableBase, formatMoney(document.totals.taxableBase, document.locale, document.currency ?? "MAD")],
+      [`${labels.vat} (${((document.vatRate ?? 0) * 100).toFixed(0)}%)`, formatMoney(document.totals.vatAmount, document.locale, document.currency ?? "MAD")],
+      [labels.total, formatMoney(document.totals.total, document.locale, document.currency ?? "MAD")]
     ] as const;
 
     y += 12;
@@ -465,16 +484,19 @@ export const renderDocumentPdf = async (
 
   useFont(doc, options?.fonts?.regular, "Helvetica");
   const actualPageHeight = doc.page.height ?? 841.89;
-  const footerText = normalizeFooterText(document.footer ?? `${document.title} ${document.number}`);
+  const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
+  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
   const footerOptions = {
     width: tableWidth,
     align: "center" as const,
     lineGap: 1
   };
-  const footerHeight = doc.heightOfString(footerText, footerOptions);
-  doc.page.margins.bottom = 0;
-  doc.fillColor("#9ca3af").fontSize(8);
-  drawFixedText(doc, footerText, PAGE.margin, actualPageHeight - footerHeight, footerOptions);
+  if (footerText.length > 0) {
+    const footerHeight = doc.heightOfString(footerText, footerOptions);
+    doc.page.margins.bottom = 0;
+    doc.fillColor("#9ca3af").fontSize(8);
+    drawFixedText(doc, footerText, PAGE.margin, actualPageHeight - footerHeight, footerOptions);
+  }
 
   doc.end();
   return pdfBytesPromise;

@@ -42,25 +42,16 @@ npm install @ic-labs/invoice-kit
 import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
-  number: "FAC-2026-0001",
+  title: "Facture",
   issuer: {
     name: "IC Labs SARL",
-    logo: "https://example.com/assets/logo.png",
-    addressLines: ["Casablanca, Maroc"],
-    ice: "001234567890123",
-    if: "12345678",
-    rc: "56789"
+    logo: "https://example.com/assets/logo.png"
   },
   seller: {
-    name: "IC Distribution SARL",
-    addressLines: ["Casablanca, Maroc"],
-    ice: "001234567890123",
-    if: "12345678",
-    rc: "56789"
+    name: "IC Distribution SARL"
   },
   client: {
-    name: "Client Demo",
-    addressLines: ["Rabat, Maroc"]
+    name: "Client Demo"
   },
   items: [
     {
@@ -149,16 +140,19 @@ Important behavior for delivery notes:
 
 All document factories accept a typed object shaped like `DocumentInput`.
 
-### Required fields
+### Modular fields
 
-- `number: string`
-- `issuer: Issuer`
-- `seller: Party`
-- `client: Party`
-- `items: LineItemInput[]`
+- Every top-level field is optional.
+- If a field is omitted, that module is not rendered into the PDF.
+- The library does not inject missing modules into the output.
 
-### Common optional fields
+Available modules:
 
+- `number?: string`
+- `issuer?: Issuer`
+- `seller?: Party`
+- `client?: Party`
+- `items?: LineItemInput[]`
 - `issueDate?: Date`
 - `dueDate?: Date`
 - `currency?: string`
@@ -171,12 +165,28 @@ All document factories accept a typed object shaped like `DocumentInput`.
 - `locale?: "fr-MA" | "ar-MA"`
 - `title?: string`
 
+Examples:
+
+```ts
+createInvoice({
+  title: "Facture",
+  footer: "IC Labs SARL"
+});
+```
+
+```ts
+createQuote({
+  issuer: { name: "IC Labs SARL", logo: "https://example.com/logo.png" },
+  client: { name: "Client Demo" }
+});
+```
+
 ### `footer`
 
 - `footer` is an optional string rendered centered at the extreme bottom of the PDF
 - multiline strings are supported with `\n`
 - when multiple lines are provided, rendering starts higher so the last line ends at the bottom edge
-- if `footer` is omitted, the PDF falls back to the document title and number in the footer area
+- if `footer` is omitted, the PDF falls back to the document title and number only when one of them exists
 
 ### `Issuer`
 
@@ -219,8 +229,9 @@ interface Party {
 
 Notes:
 
-- `addressLines` must contain at least one line
-- issuer identifiers `ICE`, `IF`, and `RC` are rendered directly inside issuer details
+- all party fields are optional modules too
+- only provided party fields are rendered
+- issuer identifiers `ICE`, `IF`, and `RC` are rendered directly inside issuer details when provided
 - seller identifiers `ICE`, `IF`, and `RC` are rendered in the seller section when provided
 
 ### `LineItemInput`
@@ -239,7 +250,7 @@ interface LineItemInput {
 
 Notes:
 
-- financial documents require either `unitPrice` or `price`
+- financial documents only need `unitPrice` or `price` when you actually include priced items
 - delivery notes do not require pricing
 - `discountRate` is a decimal ratio, for example:
   - `0.1` for 10%
@@ -427,12 +438,11 @@ The library validates document input before building the document model.
 Examples of enforced rules:
 
 - `number` must be present
-- issuer and client names must be non-empty
-- issuer, seller, and client must have at least one address line
-- seller and client names must be non-empty
+- provided issuer, seller, and client names must be non-empty
+- provided address lines must be non-empty
 - `items` must contain at least one line item
-- quantity must be greater than zero
-- financial documents require `unitPrice` or `price`
+- provided item quantity must be greater than zero
+- priced financial items require `unitPrice` or `price`
 - negative prices are rejected
 - negative discounts are rejected
 - `vatRate` must be between `0` and `1`
@@ -445,29 +455,15 @@ Examples of enforced rules:
 
 Invoices, quotes, and purchase orders render:
 
-- issuer block
-- seller block
-- client block
-- issue/due date
-- currency
-- item table with amount columns
-- totals section
-- payment terms
-- bank details
-- notes
-- footer
+- only the modules you provide
+- for example: issuer block, seller block, client block, metadata, item table, totals, payment terms, bank details, notes, footer
 
 ### Delivery notes
 
 Delivery notes render:
 
-- issuer block
-- seller block
-- client block
-- issue/due date
-- item table with designation and quantity only
-- notes
-- footer
+- only the modules you provide
+- item tables remain quantity-only when items are present
 
 Delivery notes do not render:
 
@@ -488,13 +484,9 @@ Delivery notes do not render:
 import { createInvoice } from "@ic-labs/invoice-kit";
 
 const invoice = createInvoice({
-  number: "FAC-2026-0020",
   issuer: {
     name: "IC Labs SARL",
-    addressLines: ["Casablanca"],
-    ice: "001234567890123",
-    if: "12345678",
-    rc: "56789"
+    addressLines: ["Casablanca"]
   },
   seller: {
     name: "IC Distribution SARL",
@@ -530,7 +522,6 @@ const invoice = createInvoice({
 import { createQuote } from "@ic-labs/invoice-kit";
 
 const quote = createQuote({
-  number: "DEV-2026-0012",
   issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]
@@ -567,7 +558,6 @@ const quote = createQuote({
 import { createDeliveryNote } from "@ic-labs/invoice-kit";
 
 const deliveryNote = createDeliveryNote({
-  number: "BL-2026-0015",
   issuer: {
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]

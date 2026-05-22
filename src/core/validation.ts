@@ -13,10 +13,12 @@ const assertFiniteNumber = (value: number, field: string): void => {
 };
 
 const validateParty = (party: Party, field: string): void => {
-  assertNonEmptyString(party.name, `${field}.name`);
+  if (party.name !== undefined) {
+    assertNonEmptyString(party.name, `${field}.name`);
+  }
 
-  if (party.addressLines.length === 0) {
-    throw new Error(`${field}.addressLines must contain at least one line.`);
+  if (!party.addressLines) {
+    return;
   }
 
   for (const [index, line] of party.addressLines.entries()) {
@@ -91,16 +93,27 @@ const validateBankInfo = (bankInfo: BankInfo): void => {
 export const validateDocumentInput = (input: CreateDocumentOptions): void => {
   const requiresPricing = input.type !== "deliveryNote";
 
-  assertNonEmptyString(input.number, "number");
-  validateIssuer(input.issuer);
-  validateParty(input.seller, "seller");
-  validateParty(input.client, "client");
-
-  if (input.items.length === 0) {
-    throw new Error("items must contain at least one line item.");
+  if (input.number !== undefined) {
+    assertNonEmptyString(input.number, "number");
   }
 
-  input.items.forEach((item, index) => {
+  if (input.title !== undefined) {
+    assertNonEmptyString(input.title, "title");
+  }
+
+  if (input.issuer) {
+    validateIssuer(input.issuer);
+  }
+
+  if (input.seller) {
+    validateParty(input.seller, "seller");
+  }
+
+  if (input.client) {
+    validateParty(input.client, "client");
+  }
+
+  input.items?.forEach((item, index) => {
     validateItem(item, index, requiresPricing);
   });
 

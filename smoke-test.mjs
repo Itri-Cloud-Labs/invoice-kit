@@ -273,16 +273,23 @@ try {
     notes: "Marchandise remise au responsable du site."
   });
 
+  const sparseInvoice = createInvoice({
+    title: "Facture simplifiee",
+    footer: "IC Labs SARL"
+  });
+
   await invoice.toPDF({ outputPath: "./sample-invoice.pdf" });
   await quote.toPDF({ outputPath: "./sample-quote.pdf" });
   await purchaseOrder.toPDF({ outputPath: "./sample-purchase-order.pdf" });
   await deliveryNote.toPDF({ outputPath: "./sample-delivery-note.pdf" });
+  await sparseInvoice.toPDF({ outputPath: "./sample-sparse-invoice.pdf" });
 
   console.log({
     invoice: invoice.toJSON(),
     quote: quote.toJSON(),
     purchaseOrder: purchaseOrder.toJSON(),
-    deliveryNote: deliveryNote.toJSON()
+    deliveryNote: deliveryNote.toJSON(),
+    sparseInvoice: sparseInvoice.toJSON()
   });
 } finally {
   await close();

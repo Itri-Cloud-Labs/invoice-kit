@@ -1,35 +1,32 @@
 import { BusinessDocument } from "./document.js";
 import type { CreateDocumentOptions, DocumentInput, DocumentType } from "./types.js";
 import { validateDocumentInput } from "./validation.js";
-import { createTemplateDefinition } from "../templates/definitions.js";
-import { getLabels } from "../locales/index.js";
 import { computeLineItem, computeTotals, MOROCCO_DEFAULT_VAT_RATE } from "../utils/taxes.js";
 
 const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocument => {
   validateDocumentInput(options);
 
   const locale = options.locale ?? "fr-MA";
-  const template = createTemplateDefinition(options.type);
   const isDeliveryNote = options.type === "deliveryNote";
-  const items = options.items.map(computeLineItem);
+  const items = (options.items ?? []).map(computeLineItem);
   const discounts = isDeliveryNote ? [] : (options.discounts ?? []);
   const vatRate = isDeliveryNote ? 0 : (options.vatRate ?? MOROCCO_DEFAULT_VAT_RATE);
-  const issueDate = options.issueDate ?? new Date();
-  const labels = getLabels(locale);
+  const totals = !isDeliveryNote && items.length > 0 ? computeTotals(items, discounts, vatRate) : undefined;
+
   const data = {
     type: options.type,
-    title: options.title ?? template.getTitle(locale) ?? labels.documentTitle,
-    number: options.number,
-    issueDate,
-    issuer: options.issuer,
-    seller: options.seller,
-    client: options.client,
-    items,
-    currency: options.currency ?? "MAD",
-    vatRate,
-    discounts,
     locale,
-    totals: computeTotals(items, discounts, vatRate)
+    ...(options.title ? { title: options.title } : {}),
+    ...(options.number ? { number: options.number } : {}),
+    ...(options.issueDate ? { issueDate: options.issueDate } : {}),
+    ...(options.issuer ? { issuer: options.issuer } : {}),
+    ...(options.seller ? { seller: options.seller } : {}),
+    ...(options.client ? { client: options.client } : {}),
+    ...(items.length > 0 ? { items } : {}),
+    ...(options.currency ? { currency: options.currency } : {}),
+    ...(!isDeliveryNote && items.length > 0 ? { vatRate } : {}),
+    ...(discounts.length > 0 ? { discounts } : {}),
+    ...(totals ? { totals } : {})
   };
 
   return new BusinessDocument({
