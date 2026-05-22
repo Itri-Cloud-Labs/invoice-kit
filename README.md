@@ -51,6 +51,13 @@ const invoice = createInvoice({
     if: "12345678",
     rc: "56789"
   },
+  seller: {
+    name: "IC Distribution SARL",
+    addressLines: ["Casablanca, Maroc"],
+    ice: "001234567890123",
+    if: "12345678",
+    rc: "56789"
+  },
   client: {
     name: "Client Demo",
     addressLines: ["Rabat, Maroc"]
@@ -146,6 +153,7 @@ All document factories accept a typed object shaped like `DocumentInput`.
 
 - `number: string`
 - `issuer: Issuer`
+- `seller: Party`
 - `client: Party`
 - `items: LineItemInput[]`
 
@@ -181,8 +189,16 @@ interface Issuer extends Party {
 `issuer` is the document emitter and the source of header branding.
 
 - `issuer.logo` is the logo rendered in the PDF header
-- `issuer.name` is rendered in the issuer block
-- issuer address and business identifiers render directly below the issuer name
+- `issuer.name` is rendered in the header brand block
+- issuer address and business identifiers render directly below the issuer name in the header
+
+### `seller`
+
+`seller` is the commercial party shown in the document body.
+
+- `seller` remains separate from `issuer`
+- use `issuer` for brand/emitter identity and header logo
+- use `seller` for the legal or operational selling entity shown in the document sections
 
 ### `Party`
 
@@ -205,6 +221,7 @@ Notes:
 
 - `addressLines` must contain at least one line
 - issuer identifiers `ICE`, `IF`, and `RC` are rendered directly inside issuer details
+- seller identifiers `ICE`, `IF`, and `RC` are rendered in the seller section when provided
 
 ### `LineItemInput`
 
@@ -317,6 +334,7 @@ The package is tailored for Morocco:
 - `MAD` default currency
 - `TVA` terminology
 - issuer company fields:
+- seller company fields:
   - `ICE`
   - `IF`
   - `RC`
@@ -339,6 +357,10 @@ const quote = createQuote({
   locale: "ar-MA",
   issuer: {
     name: "IC Labs SARL",
+    addressLines: ["Casablanca"]
+  },
+  seller: {
+    name: "IC Distribution SARL",
     addressLines: ["Casablanca"]
   },
   client: {
@@ -406,7 +428,8 @@ Examples of enforced rules:
 
 - `number` must be present
 - issuer and client names must be non-empty
-- issuer and client must have at least one address line
+- issuer, seller, and client must have at least one address line
+- seller and client names must be non-empty
 - `items` must contain at least one line item
 - quantity must be greater than zero
 - financial documents require `unitPrice` or `price`
@@ -423,6 +446,7 @@ Examples of enforced rules:
 Invoices, quotes, and purchase orders render:
 
 - issuer block
+- seller block
 - client block
 - issue/due date
 - currency
@@ -438,6 +462,7 @@ Invoices, quotes, and purchase orders render:
 Delivery notes render:
 
 - issuer block
+- seller block
 - client block
 - issue/due date
 - item table with designation and quantity only
@@ -470,6 +495,10 @@ const invoice = createInvoice({
     ice: "001234567890123",
     if: "12345678",
     rc: "56789"
+  },
+  seller: {
+    name: "IC Distribution SARL",
+    addressLines: ["Casablanca"]
   },
   client: {
     name: "Noxel SAS",
@@ -506,6 +535,10 @@ const quote = createQuote({
     name: "IC Labs SARL",
     addressLines: ["Casablanca"]
   },
+  seller: {
+    name: "IC Distribution SARL",
+    addressLines: ["Casablanca"]
+  },
   client: {
     name: "Client",
     addressLines: ["Rabat"]
@@ -537,6 +570,10 @@ const deliveryNote = createDeliveryNote({
   number: "BL-2026-0015",
   issuer: {
     name: "IC Labs SARL",
+    addressLines: ["Casablanca"]
+  },
+  seller: {
+    name: "IC Distribution SARL",
     addressLines: ["Casablanca"]
   },
   client: {

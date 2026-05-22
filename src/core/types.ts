@@ -68,6 +68,7 @@ export type BankInfo = LocalBankInfo | InternationalBankInfo;
 export interface DocumentInput {
   number: string;
   issuer: Issuer;
+  seller: Party;
   client: Party;
   items: LineItemInput[];
   issueDate?: Date;
@@ -98,6 +99,7 @@ export interface BusinessDocumentData {
   issueDate: Date;
   dueDate?: Date;
   issuer: Issuer;
+  seller: Party;
   client: Party;
   items: LineItem[];
   currency: string;

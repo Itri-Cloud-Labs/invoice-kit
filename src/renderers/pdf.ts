@@ -164,6 +164,18 @@ const buildIssuerLines = (document: BusinessDocumentData, labels: ReturnType<typ
   document.issuer.rc ? `${labels.rc}: ${document.issuer.rc}` : ""
 ].filter((line) => line.length > 0);
 
+const buildSellerLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
+  document.seller.name,
+  ...document.seller.addressLines,
+  [document.seller.city, document.seller.country].filter(Boolean).join(", "),
+  document.seller.phone ? `Tel: ${document.seller.phone}` : "",
+  document.seller.email ? `Email: ${document.seller.email}` : "",
+  document.seller.taxId ? `${labels.if}: ${document.seller.taxId}` : "",
+  document.seller.ice ? `${labels.ice}: ${document.seller.ice}` : "",
+  document.seller.if ? `${labels.if}: ${document.seller.if}` : "",
+  document.seller.rc ? `${labels.rc}: ${document.seller.rc}` : ""
+].filter((line) => line.length > 0);
+
 const buildClientLines = (document: BusinessDocumentData, labels: ReturnType<typeof getLabels>): string[] => [
   document.client.name,
   ...document.client.addressLines,
@@ -242,6 +254,7 @@ export const renderDocumentPdf = async (
     lineGap: 1
   });
 
+  const sellerLines = buildSellerLines(document, labels);
   const clientLines = buildClientLines(document, labels);
   const bankLines = !isDeliveryNote && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
 
@@ -274,20 +287,29 @@ export const renderDocumentPdf = async (
 
   useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
   doc.fillColor("#6b7280").fontSize(10);
-  if (bankLines) {
-    drawFixedText(doc, labels.bankDetails, leftColumnX, sectionsTopY, { width: columnWidth, align });
-  }
+  drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
   drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
 
   useFont(doc, options?.fonts?.regular, "Helvetica");
   doc.fillColor("#111827").fontSize(9);
-  const leftSectionBottomY = bankLines
-    ? drawFixedText(doc, bankLines.join("\n"), leftColumnX, sectionsTopY + 14, {
-        width: 270,
-        align,
-        lineGap: 1
-      })
-    : sectionsTopY;
+  let leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + 14, {
+    width: 270,
+    align,
+    lineGap: 1
+  });
+
+  if (bankLines) {
+    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    doc.fillColor("#6b7280").fontSize(9);
+    drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + 8, { width: columnWidth, align });
+    useFont(doc, options?.fonts?.regular, "Helvetica");
+    doc.fillColor("#111827").fontSize(9);
+    leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + 20, {
+      width: 270,
+      align,
+      lineGap: 1
+    });
+  }
 
   const clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 14, {
     width: columnWidth,

@@ -74,6 +74,19 @@ try {
     phone: "+212500000000"
   };
 
+  const seller = {
+    name: "IC Distribution",
+    addressLines: ["Parc logistique Sidi Maarouf", "Batiment C2"],
+    city: "Casablanca",
+    country: "Maroc",
+    taxId: "SELLER-TAX-0099",
+    ice: "009876543210987",
+    if: "87654321",
+    rc: "112233",
+    email: "sales@icdistribution.ma",
+    phone: "+212522000111"
+  };
+
   const invoice = createInvoice({
     number: "FAC-2026-0001",
     title: "Facture ",
@@ -83,6 +96,7 @@ try {
     currency: "MAD",
     vatRate: 0.2,
     issuer: baseIssuer,
+    seller,
     client,
     items: [
       {
@@ -131,6 +145,7 @@ try {
     currency: "MAD",
     vatRate: 0.2,
     issuer: baseIssuer,
+    seller,
     client: {
       ...client,
       name: "Noxel SAS",
@@ -172,6 +187,7 @@ try {
     currency: "MAD",
     vatRate: 0.2,
     issuer: baseIssuer,
+    seller,
     client: {
       ...client,
       name: "Fournisseur Equipement Pro",
@@ -221,6 +237,7 @@ try {
     currency: "MAD",
     vatRate: 0.2,
     issuer: baseIssuer,
+    seller,
     client,
     items: [
       {

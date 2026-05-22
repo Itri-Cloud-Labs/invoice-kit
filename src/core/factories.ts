@@ -22,6 +22,7 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
     number: options.number,
     issueDate,
     issuer: options.issuer,
+    seller: options.seller,
     client: options.client,
     items,
     currency: options.currency ?? "MAD",

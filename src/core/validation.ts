@@ -93,6 +93,7 @@ export const validateDocumentInput = (input: CreateDocumentOptions): void => {
 
   assertNonEmptyString(input.number, "number");
   validateIssuer(input.issuer);
+  validateParty(input.seller, "seller");
   validateParty(input.client, "client");
 
   if (input.items.length === 0) {
