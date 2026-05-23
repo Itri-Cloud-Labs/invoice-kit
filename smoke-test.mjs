@@ -112,7 +112,7 @@ try {
         description: "Phase 1 de parametrage, accompagnement utilisateurs clefs, reprise des donnees et documentation operationnelle detaillee pour les equipes finance et support",
         quantity: 2,
         price: 1800,
-        unit: "jour",
+        unit: "journee d'intervention sur site",
         discountRate: 0.05
       }
     ],

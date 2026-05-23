@@ -153,6 +153,18 @@ const getWrappedRowHeight = (
   return Math.max(minHeight, Math.ceil(textHeight + 12));
 };
 
+const getMaxRowHeight = (
+  doc: PDFKit.PDFDocument,
+  cells: Array<{ text: string; width: number; options: PDFKit.Mixins.TextOptions }>,
+  minHeight: number
+): number => {
+  const tallestCell = cells.reduce((maxHeight, cell) => (
+    Math.max(maxHeight, getWrappedRowHeight(doc, cell.text, cell.width, minHeight, cell.options))
+  ), minHeight);
+
+  return tallestCell;
+};
+
 const buildPartyLines = (party: Party | undefined, labels: ReturnType<typeof getLabels>, includeName = true): string[] => {
   if (!party) {
     return [];
@@ -355,16 +367,21 @@ export const renderDocumentPdf = async (
       useFont(doc, options?.fonts?.regular, "Helvetica");
       for (const item of items) {
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-        const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+        const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
+        const rowHeight = getMaxRowHeight(doc, [
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+        ], 24);
         doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor("#111827").fontSize(10);
         drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
           width: columns.itemWidth,
           align
         });
-        drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
+        drawFixedText(doc, quantityLabel, columns.quantityX, y + 8, {
           width: columns.quantityWidth,
-          align: "right"
+          align: "right",
+          lineGap: 1
         });
         y += rowHeight;
       }
@@ -390,7 +407,11 @@ export const renderDocumentPdf = async (
       useFont(doc, options?.fonts?.regular, "Helvetica");
       for (const item of items) {
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-        const rowHeight = getWrappedRowHeight(doc, itemLabel, columns.itemWidth, 24, { align, lineGap: 1 });
+        const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
+        const rowHeight = getMaxRowHeight(doc, [
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+        ], 24);
         doc.strokeColor("#d1d5db").lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor("#111827").fontSize(10);
         drawFixedText(doc, itemLabel, columns.itemX, y + 8, {
@@ -398,9 +419,10 @@ export const renderDocumentPdf = async (
           align,
           lineGap: 1
         });
-        drawFixedText(doc, `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`, columns.quantityX, y + 8, {
+        drawFixedText(doc, quantityLabel, columns.quantityX, y + 8, {
           width: columns.quantityWidth,
-          align: "right"
+          align: "right",
+          lineGap: 1
         });
         drawFixedText(doc, truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth), columns.unitPriceX, y + 8, {
           width: columns.unitPriceWidth,
