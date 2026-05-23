@@ -212,6 +212,15 @@ export const renderDocumentPdf = async (
   const metaTopX = rightColumnX;
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
+  const logoFit: [number, number] = isDeliveryNote ? [80, 80] : [72, 72];
+  const issuerNameOffsetY = isDeliveryNote ? 2 : 0;
+  const issuerDetailsOffsetY = isDeliveryNote ? 28 : 22;
+  const sectionGapY = isDeliveryNote ? 20 : 10;
+  const sectionBodyOffsetY = isDeliveryNote ? 18 : 14;
+  const sectionAfterGapY = isDeliveryNote ? 18 : 10;
+  const bankSectionGapY = isDeliveryNote ? 14 : 8;
+  const bankSectionBodyOffsetY = isDeliveryNote ? 24 : 20;
+  const tableTopGapY = isDeliveryNote ? 16 : 10;
 
   // pdfkit is chosen because it stays lightweight while supporting custom TTF/OTF fonts,
   // which is necessary for Arabic-capable PDF output in a Node-only library.
@@ -228,15 +237,15 @@ export const renderDocumentPdf = async (
 
   const pdfBytesPromise = collectPdf(doc);
   const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
+  const issuerTextX = leftColumnX + (logoBuffer ? 92 : 0);
+  const issuerTextWidth = logoBuffer ? 148 : 240;
 
   if (logoBuffer) {
     doc.image(logoBuffer, leftColumnX, PAGE.headerTop, {
-      fit: [72, 72]
+      fit: logoFit
     });
   }
 
-  const issuerTextX = leftColumnX + (logoBuffer ? 84 : 0);
-  const issuerTextWidth = logoBuffer ? 156 : 240;
   let issuerHeaderBottomY = PAGE.headerTop;
   const issuerName = document.issuer?.name;
   const issuerLines = buildPartyLines(document.issuer, labels, false);
@@ -244,17 +253,17 @@ export const renderDocumentPdf = async (
   if (issuerName) {
     useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
     doc.fillColor("#173d73").fontSize(17);
-    drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop, {
+    drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
       width: issuerTextWidth,
       align
     });
-    issuerHeaderBottomY = PAGE.headerTop + 20;
+    issuerHeaderBottomY = PAGE.headerTop + issuerDetailsOffsetY - 2;
   }
 
   if (issuerLines.length > 0) {
     useFont(doc, options?.fonts?.regular, "Helvetica");
     doc.fillColor("#111827").fontSize(9);
-    issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + (issuerName ? 22 : 0), {
+    issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + (issuerName ? issuerDetailsOffsetY : 0), {
       width: issuerTextWidth,
       align,
       lineGap: 1
@@ -296,10 +305,11 @@ export const renderDocumentPdf = async (
     metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.currency, document.currency, columnWidth, align));
   }
 
-  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, PAGE.headerTop + 48);
-  let y = headerBottomY + 10;
+  const minimumHeaderBottomY = PAGE.headerTop + (isDeliveryNote ? 72 : 48);
+  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, minimumHeaderBottomY);
+  let y = headerBottomY + tableTopGapY;
   if (sellerLines.length > 0 || clientLines.length > 0 || bankLines) {
-    const sectionsTopY = headerBottomY + 10;
+    const sectionsTopY = headerBottomY + sectionGapY;
 
     useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
     doc.fillColor("#6b7280").fontSize(10);
@@ -314,7 +324,7 @@ export const renderDocumentPdf = async (
     doc.fillColor("#111827").fontSize(9);
     let leftSectionBottomY = sectionsTopY;
     if (sellerLines.length > 0) {
-      leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + 14, {
+      leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + sectionBodyOffsetY, {
         width: 270,
         align,
         lineGap: 1
@@ -324,10 +334,10 @@ export const renderDocumentPdf = async (
     if (bankLines) {
       useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
       doc.fillColor("#6b7280").fontSize(9);
-      drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + 8, { width: columnWidth, align });
+      drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + bankSectionGapY, { width: columnWidth, align });
       useFont(doc, options?.fonts?.regular, "Helvetica");
       doc.fillColor("#111827").fontSize(9);
-      leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + 20, {
+      leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + bankSectionBodyOffsetY, {
         width: 270,
         align,
         lineGap: 1
@@ -336,14 +346,14 @@ export const renderDocumentPdf = async (
 
     let clientBottomY = sectionsTopY;
     if (clientLines.length > 0) {
-      clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + 14, {
+      clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + sectionBodyOffsetY, {
         width: columnWidth,
         align,
         lineGap: 1
       });
     }
 
-    y = Math.max(leftSectionBottomY, clientBottomY) + 10;
+    y = Math.max(leftSectionBottomY, clientBottomY) + sectionAfterGapY;
   }
 
   const items = document.items ?? [];

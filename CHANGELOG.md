@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.6
+
+- Increase delivery note header, party section, and table spacing for a roomier layout
+- Slightly enlarge delivery note logo fit while keeping financial documents compact
+
 ## 0.1.1
 
 - Improve PDF pagination to avoid wasteful extra pages in common document layouts
