@@ -213,14 +213,19 @@ export const renderDocumentPdf = async (
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
   const logoFit: [number, number] = isDeliveryNote ? [80, 80] : [72, 72];
-  const issuerNameOffsetY = isDeliveryNote ? 2 : 0;
-  const issuerDetailsOffsetY = isDeliveryNote ? 28 : 22;
-  const sectionGapY = isDeliveryNote ? 20 : 10;
-  const sectionBodyOffsetY = isDeliveryNote ? 18 : 14;
-  const sectionAfterGapY = isDeliveryNote ? 18 : 10;
-  const bankSectionGapY = isDeliveryNote ? 14 : 8;
-  const bankSectionBodyOffsetY = isDeliveryNote ? 24 : 20;
-  const tableTopGapY = isDeliveryNote ? 16 : 10;
+  const issuerNameOffsetY = isDeliveryNote ? 3 : 1;
+  const issuerDetailsOffsetY = isDeliveryNote ? 30 : 24;
+  const titleMetaGapY = document.title ? 6 : 0;
+  const metaRowGapY = 4;
+  const sectionGapY = isDeliveryNote ? 22 : 14;
+  const sectionBodyOffsetY = isDeliveryNote ? 20 : 16;
+  const sectionAfterGapY = isDeliveryNote ? 20 : 14;
+  const bankSectionGapY = isDeliveryNote ? 16 : 10;
+  const bankSectionBodyOffsetY = isDeliveryNote ? 26 : 22;
+  const tableTopGapY = isDeliveryNote ? 18 : 12;
+  const trailingSectionGapY = 14;
+  const notesBodyOffsetY = 14;
+  const trailingBottomGapY = 10;
 
   // pdfkit is chosen because it stays lightweight while supporting custom TTF/OTF fonts,
   // which is necessary for Arabic-capable PDF output in a Node-only library.
@@ -289,20 +294,20 @@ export const renderDocumentPdf = async (
   if (document.number) {
     useFont(doc, options?.fonts?.regular, "Helvetica");
     doc.fillColor("#4b5563").fontSize(9);
-    metaBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + (document.title ? 4 : 0), {
+    metaBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + titleMetaGapY, {
       width: columnWidth,
       align
     });
   }
 
   if (document.issueDate) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align));
   }
   if (document.dueDate) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align));
   }
   if (!isDeliveryNote && document.currency) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + 2, labels.currency, document.currency, columnWidth, align));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.currency, document.currency, columnWidth, align));
   }
 
   const minimumHeaderBottomY = PAGE.headerTop + (isDeliveryNote ? 72 : 48);
@@ -464,7 +469,7 @@ export const renderDocumentPdf = async (
     const notesHeight = notes.length > 0
       ? 12 + 12 + doc.heightOfString(notes.join("\n"), { width: notesWidth, align, lineGap: 1 }) + 8
       : 0;
-    y = ensureSectionSpace(doc, y + 12, Math.max(totalsHeight, notesHeight)) - 12;
+    y = ensureSectionSpace(doc, y + trailingSectionGapY, Math.max(totalsHeight, notesHeight)) - trailingSectionGapY;
     const totalsX = PAGE.width - PAGE.margin - 220;
     const totals = [
       [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency ?? "MAD")],
@@ -474,7 +479,7 @@ export const renderDocumentPdf = async (
       [labels.total, formatMoney(document.totals.total, document.locale, document.currency ?? "MAD")]
     ] as const;
 
-    y += 12;
+    y += trailingSectionGapY;
     let trailingBottomY = y;
 
     if (notes.length > 0) {
@@ -483,7 +488,7 @@ export const renderDocumentPdf = async (
       drawFixedText(doc, labels.notes, PAGE.margin, y, { width: notesWidth, align });
       useFont(doc, options?.fonts?.regular, "Helvetica");
       doc.fillColor("#111827").fontSize(9);
-      trailingBottomY = drawFixedText(doc, notes.join("\n"), PAGE.margin, y + 12, {
+      trailingBottomY = drawFixedText(doc, notes.join("\n"), PAGE.margin, y + notesBodyOffsetY, {
         width: notesWidth,
         align,
         lineGap: 1
@@ -501,17 +506,17 @@ export const renderDocumentPdf = async (
       drawFixedText(doc, truncateText(doc, value, 85), totalsX + 125, y + 7, { width: 85, align: "right" });
       y += 24;
     });
-    y = Math.max(y, trailingBottomY + 8);
+    y = Math.max(y, trailingBottomY + trailingBottomGapY);
   } else if (notes.length > 0) {
     const notesHeight = 12 + 12 + doc.heightOfString(notes.join("\n"), { width: tableWidth, align, lineGap: 1 }) + 8;
-    y = ensureSectionSpace(doc, y + 12, notesHeight) - 12;
-    y += 12;
+    y = ensureSectionSpace(doc, y + trailingSectionGapY, notesHeight) - trailingSectionGapY;
+    y += trailingSectionGapY;
     useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
     doc.fillColor("#6b7280").fontSize(10);
     drawFixedText(doc, labels.notes, PAGE.margin, y, { width: tableWidth, align });
     useFont(doc, options?.fonts?.regular, "Helvetica");
     doc.fillColor("#111827").fontSize(9);
-    drawFixedText(doc, notes.join("\n"), PAGE.margin, y + 12, { width: tableWidth, align, lineGap: 1 });
+    drawFixedText(doc, notes.join("\n"), PAGE.margin, y + notesBodyOffsetY, { width: tableWidth, align, lineGap: 1 });
   }
 
   useFont(doc, options?.fonts?.regular, "Helvetica");

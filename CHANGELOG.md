@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.7
+
+- Add a small overall spacing increase across document metadata, party sections, and trailing notes areas
+- Keep delivery notes roomier while also giving invoices, quotes, and purchase orders more breathing room
+
 ## 0.1.6
 
 - Increase delivery note header, party section, and table spacing for a roomier layout
