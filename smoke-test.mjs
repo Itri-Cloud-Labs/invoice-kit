@@ -120,6 +120,15 @@ try {
       { type: "fixed", value: 150, label: "Remise commerciale" },
       { type: "percentage", value: 0.02, label: "Escompte" }
     ],
+    colors: {
+      primary: "#7c3aed",
+      onPrimary: "#ffffff",
+      text: "#1f2937",
+      metaText: "#6b7280",
+      mutedText: "#8b5cf6",
+      border: "#ddd6fe",
+      footerText: "#a78bfa"
+    },
     paymentTerms: {
       label: "Paiement sous 30 jours",
       dueDate: new Date("2026-06-19T09:00:00Z"),

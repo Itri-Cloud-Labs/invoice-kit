@@ -1,4 +1,6 @@
-import type { BankInfo, CreateDocumentOptions, DiscountInput, Issuer, LineItemInput, Party } from "./types.js";
+import type { BankInfo, CreateDocumentOptions, DiscountInput, DocumentColors, Issuer, LineItemInput, Party } from "./types.js";
+
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const assertNonEmptyString = (value: string, field: string): void => {
   if (value.trim().length === 0) {
@@ -90,6 +92,24 @@ const validateBankInfo = (bankInfo: BankInfo): void => {
   assertNonEmptyString(bankInfo.iban, "bankInfo.iban");
 };
 
+const validateColors = (colors: DocumentColors): void => {
+  const colorFields = ["primary", "onPrimary", "text", "metaText", "mutedText", "border", "footerText"] as const;
+
+  for (const field of colorFields) {
+    const value = colors[field];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    assertNonEmptyString(value, `colors.${field}`);
+
+    if (!HEX_COLOR_PATTERN.test(value)) {
+      throw new Error(`colors.${field} must be a valid hex color like #173d73.`);
+    }
+  }
+};
+
 export const validateDocumentInput = (input: CreateDocumentOptions): void => {
   const requiresPricing = input.type !== "deliveryNote";
 
@@ -138,5 +158,9 @@ export const validateDocumentInput = (input: CreateDocumentOptions): void => {
 
   if (input.bankInfo) {
     validateBankInfo(input.bankInfo);
+  }
+
+  if (input.colors) {
+    validateColors(input.colors);
   }
 };

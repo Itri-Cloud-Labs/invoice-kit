@@ -35,7 +35,8 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
     ...(options.paymentTerms ? { paymentTerms: options.paymentTerms } : {}),
     ...(options.bankInfo ? { bankInfo: options.bankInfo } : {}),
     ...(options.notes ? { notes: options.notes } : {}),
-    ...(options.footer ? { footer: options.footer } : {})
+    ...(options.footer ? { footer: options.footer } : {}),
+    ...(options.colors ? { colors: options.colors } : {})
   });
 };
 

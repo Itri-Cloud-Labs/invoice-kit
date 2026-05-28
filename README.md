@@ -27,6 +27,7 @@ It is designed for real business usage, not a demo. The package provides typed d
   - local transfer: bank name, holder name, RIB
   - international transfer: bank name, holder name, SWIFT, IBAN
 - Remote logo URL support in PDF headers
+- Optional document color palette customization
 - Optional multiline footer rendered at the extreme bottom of the page
 - Delivery notes rendered without pricing information
 
@@ -63,6 +64,11 @@ const invoice = createInvoice({
   vatRate: 0.2,
   paymentTerms: {
     label: "Paiement sous 30 jours"
+  },
+  colors: {
+    primary: "#7c3aed",
+    mutedText: "#8b5cf6",
+    border: "#ddd6fe"
   },
   footer: "IC Labs SARL\ncontact@iclabs.ma\n+212600000000",
   bankInfo: {
@@ -162,6 +168,7 @@ Available modules:
 - `footer?: string`
 - `paymentTerms?: PaymentTerms`
 - `bankInfo?: BankInfo`
+- `colors?: DocumentColors`
 - `locale?: "fr-MA" | "ar-MA"`
 - `title?: string`
 
@@ -187,6 +194,29 @@ createQuote({
 - multiline strings are supported with `\n`
 - when multiple lines are provided, rendering starts higher so the last line ends at the bottom edge
 - if `footer` is omitted, the PDF falls back to the document title and number only when one of them exists
+
+### `colors`
+
+```ts
+interface DocumentColors {
+  primary?: string;
+  onPrimary?: string;
+  text?: string;
+  metaText?: string;
+  mutedText?: string;
+  border?: string;
+  footerText?: string;
+}
+```
+
+- `colors` is an optional top-level module for customizing the PDF palette
+- all color values are optional and must use hex format like `#173d73`
+- omitted color slots fall back to the default library palette
+- `primary` is used for the header accent, item table header, and final total row
+- `onPrimary` is used for text rendered on top of `primary`
+- `text`, `metaText`, and `mutedText` cover body text, metadata, and section labels
+- `border` controls table and totals borders
+- `footerText` controls the footer color
 
 ### `Issuer`
 
@@ -437,10 +467,9 @@ The library validates document input before building the document model.
 
 Examples of enforced rules:
 
-- `number` must be present
 - provided issuer, seller, and client names must be non-empty
 - provided address lines must be non-empty
-- `items` must contain at least one line item
+- items are validated only when you provide them
 - provided item quantity must be greater than zero
 - priced financial items require `unitPrice` or `price`
 - negative prices are rejected
@@ -448,6 +477,7 @@ Examples of enforced rules:
 - `vatRate` must be between `0` and `1`
 - `issuer.logo` must be a valid `http` or `https` URL
 - bank fields must be present according to bank mode
+- color overrides must use hex values like `#173d73`
 
 ## Rendering Behavior
 

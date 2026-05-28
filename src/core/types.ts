@@ -65,6 +65,16 @@ export interface InternationalBankInfo {
 
 export type BankInfo = LocalBankInfo | InternationalBankInfo;
 
+export interface DocumentColors {
+  primary?: string;
+  onPrimary?: string;
+  text?: string;
+  metaText?: string;
+  mutedText?: string;
+  border?: string;
+  footerText?: string;
+}
+
 export interface DocumentInput {
   number?: string;
   issuer?: Issuer;
@@ -80,6 +90,7 @@ export interface DocumentInput {
   footer?: string;
   paymentTerms?: PaymentTerms;
   bankInfo?: BankInfo;
+  colors?: DocumentColors;
   locale?: LocaleCode;
   title?: string;
 }
@@ -109,6 +120,7 @@ export interface BusinessDocumentData {
   bankInfo?: BankInfo;
   notes?: string;
   footer?: string;
+  colors?: DocumentColors;
   locale: LocaleCode;
   totals?: DocumentTotals;
 }

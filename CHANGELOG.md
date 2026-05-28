@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.8
+
+- Add optional document color customization with named palette slots for accents, text, borders, and footer text
+- Validate color overrides as hex values and document the new `colors` module in the README
+
 ## 0.1.7
 
 - Add a small overall spacing increase across document metadata, party sections, and trailing notes areas
