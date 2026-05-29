@@ -17,7 +17,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - Clean factories for all document types
 - Automatic subtotal, discount, VAT, taxable base, and total calculations
 - Multi-page item tables for longer documents
-- Automated `node:test` coverage for totals, validation, sparse documents, and pagination
+- Automated `node:test` coverage for totals, validation, sparse documents, remote logo formats, and pagination
 - Moroccan defaults:
   - currency: `MAD`
   - VAT label: `TVA`
@@ -28,7 +28,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - Bank details support:
   - local transfer: bank name, holder name, RIB
   - international transfer: bank name, holder name, SWIFT, IBAN
-- Remote logo URL support in PDF headers
+- Remote logo URL support in PDF headers, including SVG and WEBP
 - Optional document color palette customization
 - Optional multiline footer rendered at the extreme bottom of the page
 - Delivery notes rendered without pricing information
@@ -416,7 +416,7 @@ const quote = createQuote({
 
 ### Arabic PDF rendering
 
-Arabic labels are supported. The renderer first tries your explicit `toPDF({ fonts })` values, then falls back to common system Arabic fonts when available.
+Arabic labels are supported out of the box. The renderer first tries your explicit `toPDF({ fonts })` values, then falls back to bundled Arabic-capable DejaVu Sans fonts shipped through npm dependencies.
 
 ```ts
 await quote.toPDF({
@@ -428,14 +428,12 @@ await quote.toPDF({
 });
 ```
 
-If no compatible system font is installed, provide Arabic-capable font files explicitly.
-
-Common fallback families the library tries automatically include Noto Naskh Arabic, Noto Sans Arabic, Amiri, and DejaVu Sans.
+You can still provide your own Arabic-capable font files explicitly when you want a different visual style.
 
 ## Testing
 
 - `npm test` builds the library and runs the automated `node:test` suite
-- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, remote logo format errors, and table pagination
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
 - `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
@@ -456,20 +454,17 @@ Behavior:
 - the user only provides the URL
 - the logo is rendered in the document header
 
-Currently supported remote image formats:
+Supported remote image formats include:
 
 - `PNG`
 - `JPEG` / `JPG`
-
-Currently rejected remote image formats:
-
 - `SVG`
 - `WEBP`
 
-Why:
+Behavior details:
 
-- `pdfkit` does not natively embed `SVG` or `WEBP`
-- this package intentionally keeps dependencies light and does not bundle image conversion tooling
+- the renderer converts non-native PDF image formats like `SVG` and `WEBP` into a PDF-safe PNG buffer internally
+- unsupported or unreadable remote images still fail with a clear runtime error
 
 ## Validation Rules
 
@@ -641,8 +636,6 @@ That means a release requires a version bump before pushing to `main`.
 
 ## Limitations
 
-- remote logos currently support PNG/JPEG only
-- Arabic PDF output still depends on Arabic-capable fonts being installed or provided explicitly
 - delivery notes intentionally do not display financial values
 
 ## License

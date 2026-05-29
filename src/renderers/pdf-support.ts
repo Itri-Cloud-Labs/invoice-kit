@@ -1,6 +1,8 @@
-import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import type { BankInfo, BusinessDocumentData, DocumentColors, Party, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
+
+const require = createRequire(import.meta.url);
 
 export const PAGE = {
   margin: 48,
@@ -20,41 +22,6 @@ export const DEFAULT_COLORS: Required<DocumentColors> = {
   border: "#d1d5db",
   footerText: "#9ca3af"
 };
-
-const COMMON_ARABIC_FONT_SETS = [
-  {
-    regular: "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-    bold: "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"
-  },
-  {
-    regular: "/usr/share/fonts/opentype/noto/NotoNaskhArabic-Regular.ttf",
-    bold: "/usr/share/fonts/opentype/noto/NotoNaskhArabic-Bold.ttf"
-  },
-  {
-    regular: "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-    bold: "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf"
-  },
-  {
-    regular: "/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf",
-    bold: "/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.ttf"
-  },
-  {
-    regular: "/usr/share/fonts/truetype/amiri/Amiri-Regular.ttf",
-    bold: "/usr/share/fonts/truetype/amiri/Amiri-Bold.ttf"
-  },
-  {
-    regular: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    bold: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-  },
-  {
-    regular: "/Library/Fonts/Arial Unicode.ttf",
-    bold: "/Library/Fonts/Arial Unicode.ttf"
-  },
-  {
-    regular: "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    bold: "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
-  }
-] as const;
 
 const isPngBuffer = (buffer: Uint8Array): boolean =>
   buffer.length >= 8
@@ -80,18 +47,17 @@ const normalizeFontPair = (regular?: string, bold?: string): { regular: string; 
   };
 };
 
-const resolveSystemArabicFonts = (): { regular: string; bold: string } | undefined => {
-  for (const candidate of COMMON_ARABIC_FONT_SETS) {
-    if (existsSync(candidate.regular) && existsSync(candidate.bold)) {
-      return { regular: candidate.regular, bold: candidate.bold };
-    }
-
-    if (existsSync(candidate.regular)) {
-      return { regular: candidate.regular, bold: candidate.regular };
-    }
+const resolveBundledArabicFonts = (): { regular: string; bold: string } => {
+  try {
+    return {
+      regular: require.resolve("dejavu-fonts-ttf/ttf/DejaVuSans.ttf"),
+      bold: require.resolve("dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf")
+    };
+  } catch {
+    throw new Error(
+      "Unable to resolve the bundled Arabic font fallback. Reinstall dependencies or provide options.fonts.regular/options.fonts.bold explicitly."
+    );
   }
-
-  return undefined;
 };
 
 export const collectPdf = async (doc: PDFKit.PDFDocument): Promise<Uint8Array> =>
@@ -118,14 +84,21 @@ export const fetchLogo = async (logoUrl: string): Promise<Buffer> => {
 
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+  const contentType = response.headers.get("content-type") ?? "";
 
   if (isPngBuffer(buffer) || isJpegBuffer(buffer)) {
     return buffer;
   }
 
-  throw new Error(
-    `Unsupported logo format at ${logoUrl}. Remote logos currently support PNG and JPEG only.`
-  );
+  try {
+    const { default: sharp } = await import("sharp");
+    const pipeline = contentType.includes("svg") ? sharp(buffer, { density: 300 }) : sharp(buffer);
+    return await pipeline.png().toBuffer();
+  } catch {
+    throw new Error(
+      `Unsupported logo format at ${logoUrl}. Remote logos currently support PNG, JPEG, SVG, and WEBP.`
+    );
+  }
 };
 
 export const useFont = (doc: PDFKit.PDFDocument, fontPath: string | undefined, fallback: "Helvetica" | "Helvetica-Bold"): void => {
@@ -151,14 +124,7 @@ export const resolvePdfFonts = (
     return explicitFonts;
   }
 
-  const systemFonts = resolveSystemArabicFonts();
-  if (systemFonts) {
-    return systemFonts;
-  }
-
-  throw new Error(
-    "Arabic PDF rendering requires Arabic-capable fonts. Provide options.fonts.regular/options.fonts.bold or install a common system font such as Noto Naskh Arabic, Noto Sans Arabic, Amiri, or DejaVu Sans."
-  );
+  return resolveBundledArabicFonts();
 };
 
 export const truncateText = (doc: PDFKit.PDFDocument, value: string, width: number): string => {

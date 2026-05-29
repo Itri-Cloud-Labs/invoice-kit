@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
+import sharp from "sharp";
 import { createDeliveryNote, createInvoice } from "../dist/index.js";
 
 const startTestServer = async (handler) => {
@@ -67,11 +68,25 @@ test("local bank details require a RIB", () => {
   );
 });
 
-test("remote logos reject unsupported formats during PDF generation", async () => {
+test("Arabic PDFs render without explicit fonts thanks to the bundled fallback", async () => {
+  const invoice = createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    issuer: { name: "مختبرات آي سي" },
+    client: { name: "عميل تجريبي" },
+    items: [{ name: "خدمة", quantity: 1, price: 100 }]
+  });
+
+  const pdfBytes = await invoice.toPDF();
+
+  assert.ok(pdfBytes.length > 0);
+});
+
+test("remote SVG logos are converted and rendered", async () => {
   const { url, close } = await startTestServer((request, response) => {
     if (request.url === "/logo.svg") {
       response.writeHead(200, { "Content-Type": "image/svg+xml" });
-      response.end('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
+      response.end('<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="#7c3aed" /></svg>');
       return;
     }
 
@@ -88,10 +103,47 @@ test("remote logos reject unsupported formats during PDF generation", async () =
       items: [{ name: "Audit", quantity: 1, price: 100 }]
     });
 
-    await assert.rejects(
-      () => invoice.toPDF(),
-      /Remote logos currently support PNG and JPEG only/
-    );
+    const pdfBytes = await invoice.toPDF();
+
+    assert.ok(pdfBytes.length > 0);
+  } finally {
+    await close();
+  }
+});
+
+test("remote WEBP logos are converted and rendered", async () => {
+  const webpBuffer = await sharp({
+    create: {
+      width: 12,
+      height: 12,
+      channels: 4,
+      background: { r: 23, g: 61, b: 115, alpha: 1 }
+    }
+  }).webp().toBuffer();
+
+  const { url, close } = await startTestServer((request, response) => {
+    if (request.url === "/logo.webp") {
+      response.writeHead(200, { "Content-Type": "image/webp" });
+      response.end(webpBuffer);
+      return;
+    }
+
+    response.writeHead(404);
+    response.end();
+  });
+
+  try {
+    const invoice = createInvoice({
+      issuer: {
+        name: "IC Labs SARL",
+        logo: `${url}/logo.webp`
+      },
+      items: [{ name: "Audit", quantity: 1, price: 100 }]
+    });
+
+    const pdfBytes = await invoice.toPDF();
+
+    assert.ok(pdfBytes.length > 0);
   } finally {
     await close();
   }

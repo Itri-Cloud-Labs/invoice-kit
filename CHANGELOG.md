@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.11
+
+- Add remote logo conversion for SVG and WEBP sources so `issuer.logo` is no longer limited to PNG and JPEG
+- Bundle an Arabic-capable DejaVu Sans fallback so Arabic PDFs render without requiring user-supplied font files
+
 ## 0.1.10
 
 - Add broader automated behavior tests for delivery-note normalization, sparse documents, bank-field validation, and remote logo format failures
