@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.10
+
+- Add broader automated behavior tests for delivery-note normalization, sparse documents, bank-field validation, and remote logo format failures
+- Harden string validation so missing required string fields now raise library errors instead of raw runtime `TypeError`s
+
 ## 0.1.9
 
 - Add automated unit tests for totals, validation, sparse documents, delivery note normalization, and pagination

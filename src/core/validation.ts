@@ -2,8 +2,8 @@ import type { BankInfo, CreateDocumentOptions, DiscountInput, DocumentColors, Is
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-const assertNonEmptyString = (value: string, field: string): void => {
-  if (value.trim().length === 0) {
+const assertNonEmptyString = (value: unknown, field: string): void => {
+  if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${field} must be a non-empty string.`);
   }
 };

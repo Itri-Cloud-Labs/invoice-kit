@@ -435,7 +435,7 @@ Common fallback families the library tries automatically include Noto Naskh Arab
 ## Testing
 
 - `npm test` builds the library and runs the automated `node:test` suite
-- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, and table pagination
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, remote logo format errors, and table pagination
 - `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
