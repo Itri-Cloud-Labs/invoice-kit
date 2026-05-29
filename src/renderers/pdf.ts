@@ -1,225 +1,31 @@
 import PDFDocument from "pdfkit";
-import type { BankInfo, BusinessDocumentData, DocumentColors, Party, PdfRenderOptions } from "../core/types.js";
+import type { BusinessDocumentData, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
 import { formatDate, formatMoney } from "../utils/formatting.js";
-
-const PAGE = {
-  margin: 48,
-  width: 595.28,
-  height: 841.89,
-  footerOffset: 64,
-  headerTop: 42,
-  lineGap: 14
-};
-
-const DEFAULT_COLORS: Required<DocumentColors> = {
-  primary: "#173d73",
-  onPrimary: "#ffffff",
-  text: "#111827",
-  metaText: "#4b5563",
-  mutedText: "#6b7280",
-  border: "#d1d5db",
-  footerText: "#9ca3af"
-};
-
-const collectPdf = async (doc: PDFKit.PDFDocument): Promise<Uint8Array> =>
-  new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-
-    doc.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    doc.on("end", () => {
-      resolve(new Uint8Array(Buffer.concat(chunks)));
-    });
-
-    doc.on("error", reject);
-  });
-
-const isPngBuffer = (buffer: Uint8Array): boolean =>
-  buffer.length >= 8
-  && buffer[0] === 0x89
-  && buffer[1] === 0x50
-  && buffer[2] === 0x4e
-  && buffer[3] === 0x47;
-
-const isJpegBuffer = (buffer: Uint8Array): boolean =>
-  buffer.length >= 3
-  && buffer[0] === 0xff
-  && buffer[1] === 0xd8
-  && buffer[2] === 0xff;
-
-const fetchLogo = async (logoUrl: string): Promise<Buffer> => {
-  const response = await fetch(logoUrl);
-
-  if (!response.ok) {
-    throw new Error(`Unable to fetch logo from ${logoUrl}: ${response.status} ${response.statusText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  if (isPngBuffer(buffer) || isJpegBuffer(buffer)) {
-    return buffer;
-  }
-
-  throw new Error(
-    `Unsupported logo format at ${logoUrl}. Remote logos currently support PNG and JPEG only.`
-  );
-};
-
-const useFont = (doc: PDFKit.PDFDocument, fontPath: string | undefined, fallback: "Helvetica" | "Helvetica-Bold"): void => {
-  if (fontPath) {
-    doc.font(fontPath);
-    return;
-  }
-
-  doc.font(fallback);
-};
-
-const requireArabicFontsIfNeeded = (document: BusinessDocumentData, options?: PdfRenderOptions): void => {
-  if (document.locale !== "ar-MA") {
-    return;
-  }
-
-  if (!options?.fonts?.regular || !options.fonts.bold) {
-    throw new Error(
-      "Arabic PDF rendering requires options.fonts.regular and options.fonts.bold pointing to Arabic-capable TTF/OTF font files."
-    );
-  }
-};
-
-const truncateText = (doc: PDFKit.PDFDocument, value: string, width: number): string => {
-  if (doc.widthOfString(value) <= width) {
-    return value;
-  }
-
-  let truncated = value;
-  while (truncated.length > 0 && doc.widthOfString(`${truncated}...`) > width) {
-    truncated = truncated.slice(0, -1);
-  }
-
-  return truncated.length > 0 ? `${truncated}...` : "...";
-};
-
-const drawFixedText = (
-  doc: PDFKit.PDFDocument,
-  text: string,
-  x: number,
-  y: number,
-  options: PDFKit.Mixins.TextOptions
-): number => {
-  const previousX = doc.x;
-  const previousY = doc.y;
-
-  doc.x = x;
-  doc.y = y;
-  doc.text(text, x, y, options);
-  doc.x = previousX;
-  doc.y = previousY;
-
-  return y + doc.heightOfString(text, options);
-};
-
-const normalizeFooterText = (footer: string): string =>
-  footer
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .join("\n");
-
-const ensureSectionSpace = (doc: PDFKit.PDFDocument, y: number, requiredHeight: number): number => {
-  const contentBottom = PAGE.height - PAGE.margin - 8;
-
-  if (y + requiredHeight <= contentBottom) {
-    return y;
-  }
-
-  doc.addPage();
-  return PAGE.margin;
-};
-
-const drawLabelValue = (
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  label: string,
-  value: string,
-  width: number,
-  align: "left" | "right",
-  color: string
-): number => {
-  doc.fillColor(color).fontSize(10);
-  return drawFixedText(doc, `${label}: ${value}`, x, y, { width, align });
-};
-
-const resolveColors = (colors?: DocumentColors): Required<DocumentColors> => ({
-  ...DEFAULT_COLORS,
-  ...colors
-});
-
-const getWrappedRowHeight = (
-  doc: PDFKit.PDFDocument,
-  text: string,
-  width: number,
-  minHeight: number,
-  options: PDFKit.Mixins.TextOptions
-): number => {
-  const textHeight = doc.heightOfString(text, { ...options, width });
-  return Math.max(minHeight, Math.ceil(textHeight + 12));
-};
-
-const getMaxRowHeight = (
-  doc: PDFKit.PDFDocument,
-  cells: Array<{ text: string; width: number; options: PDFKit.Mixins.TextOptions }>,
-  minHeight: number
-): number => {
-  const tallestCell = cells.reduce((maxHeight, cell) => (
-    Math.max(maxHeight, getWrappedRowHeight(doc, cell.text, cell.width, minHeight, cell.options))
-  ), minHeight);
-
-  return tallestCell;
-};
-
-const buildPartyLines = (party: Party | undefined, labels: ReturnType<typeof getLabels>, includeName = true): string[] => {
-  if (!party) {
-    return [];
-  }
-
-  return [
-    includeName ? (party.name ?? "") : "",
-    ...(party.addressLines ?? []),
-    [party.city, party.country].filter(Boolean).join(", "),
-    party.phone ? `Tel: ${party.phone}` : "",
-    party.email ? `Email: ${party.email}` : "",
-    party.taxId ? `${labels.if}: ${party.taxId}` : "",
-    party.ice ? `${labels.ice}: ${party.ice}` : "",
-    party.if ? `${labels.if}: ${party.if}` : "",
-    party.rc ? `${labels.rc}: ${party.rc}` : ""
-  ].filter((line) => line.length > 0);
-};
-
-const buildBankLines = (bankInfo: BankInfo, labels: ReturnType<typeof getLabels>): string[] => {
-  const baseLines = [
-    `${labels.bankName}: ${bankInfo.bankName}`,
-    `${labels.holderName}: ${bankInfo.holderName}`
-  ];
-
-  if (bankInfo.type === "local") {
-    return [...baseLines, `${labels.rib}: ${bankInfo.rib}`];
-  }
-
-  return [...baseLines, `${labels.swiftCode}: ${bankInfo.swiftCode}`, `${labels.iban}: ${bankInfo.iban}`];
-};
+import {
+  PAGE,
+  buildBankLines,
+  buildPartyLines,
+  collectPdf,
+  drawFixedText,
+  drawLabelValue,
+  ensureSectionSpace,
+  fetchLogo,
+  getMaxRowHeight,
+  normalizeFooterText,
+  resolveColors,
+  resolvePdfFonts,
+  truncateText,
+  useFont
+} from "./pdf-support.js";
 
 export const renderDocumentPdf = async (
   document: BusinessDocumentData,
   options?: PdfRenderOptions
 ): Promise<Uint8Array> => {
-  requireArabicFontsIfNeeded(document, options);
-
   const labels = getLabels(document.locale);
   const colors = resolveColors(document.colors);
+  const fonts = resolvePdfFonts(document, options);
   const isArabic = document.locale === "ar-MA";
   const isDeliveryNote = document.type === "deliveryNote";
   const align: "left" | "right" = isArabic ? "right" : "left";
@@ -243,6 +49,7 @@ export const renderDocumentPdf = async (
   const trailingSectionGapY = 14;
   const notesBodyOffsetY = 14;
   const trailingBottomGapY = 10;
+  const contentBottomY = PAGE.height - PAGE.margin - 8;
 
   // pdfkit is chosen because it stays lightweight while supporting custom TTF/OTF fonts,
   // which is necessary for Arabic-capable PDF output in a Node-only library.
@@ -261,6 +68,15 @@ export const renderDocumentPdf = async (
   const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
   const issuerTextX = leftColumnX + (logoBuffer ? 92 : 0);
   const issuerTextWidth = logoBuffer ? 148 : 240;
+  const ensureTableRowSpace = (currentY: number, rowHeight: number, drawHeader: (headerY: number) => void): number => {
+    if (currentY + rowHeight <= contentBottomY) {
+      return currentY;
+    }
+
+    doc.addPage();
+    drawHeader(PAGE.margin);
+    return PAGE.margin + 24;
+  };
 
   if (logoBuffer) {
     doc.image(logoBuffer, leftColumnX, PAGE.headerTop, {
@@ -273,7 +89,7 @@ export const renderDocumentPdf = async (
   const issuerLines = buildPartyLines(document.issuer, labels, false);
 
   if (issuerName) {
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.primary).fontSize(17);
     drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
       width: issuerTextWidth,
@@ -283,7 +99,7 @@ export const renderDocumentPdf = async (
   }
 
   if (issuerLines.length > 0) {
-    useFont(doc, options?.fonts?.regular, "Helvetica");
+    useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.text).fontSize(9);
     issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + (issuerName ? issuerDetailsOffsetY : 0), {
       width: issuerTextWidth,
@@ -298,7 +114,7 @@ export const renderDocumentPdf = async (
 
   let titleBottomY = PAGE.headerTop;
   if (document.title) {
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.text).fontSize(20);
     titleBottomY = drawFixedText(doc, document.title, rightColumnX, PAGE.headerTop, {
       width: columnWidth,
@@ -309,7 +125,7 @@ export const renderDocumentPdf = async (
 
   let metaBottomY = titleBottomY;
   if (document.number) {
-    useFont(doc, options?.fonts?.regular, "Helvetica");
+    useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.metaText).fontSize(9);
     metaBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + titleMetaGapY, {
       width: columnWidth,
@@ -333,7 +149,7 @@ export const renderDocumentPdf = async (
   if (sellerLines.length > 0 || clientLines.length > 0 || bankLines) {
     const sectionsTopY = headerBottomY + sectionGapY;
 
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.mutedText).fontSize(10);
     if (sellerLines.length > 0) {
       drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
@@ -342,7 +158,7 @@ export const renderDocumentPdf = async (
       drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
     }
 
-    useFont(doc, options?.fonts?.regular, "Helvetica");
+    useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.text).fontSize(9);
     let leftSectionBottomY = sectionsTopY;
     if (sellerLines.length > 0) {
@@ -354,10 +170,10 @@ export const renderDocumentPdf = async (
     }
 
     if (bankLines) {
-      useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+      useFont(doc, fonts?.bold, "Helvetica-Bold");
       doc.fillColor(colors.mutedText).fontSize(9);
       drawFixedText(doc, labels.bankDetails, leftColumnX, leftSectionBottomY + bankSectionGapY, { width: columnWidth, align });
-      useFont(doc, options?.fonts?.regular, "Helvetica");
+      useFont(doc, fonts?.regular, "Helvetica");
       doc.fillColor(colors.text).fontSize(9);
       leftSectionBottomY = drawFixedText(doc, bankLines.join("\n"), leftColumnX, leftSectionBottomY + bankSectionBodyOffsetY, {
         width: 270,
@@ -381,8 +197,6 @@ export const renderDocumentPdf = async (
   const items = document.items ?? [];
   const hasItems = items.length > 0;
   if (hasItems) {
-    doc.fillColor(colors.primary).rect(tableX, y, tableWidth, 24).fill();
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
     if (isDeliveryNote) {
       const columns = {
         itemX: tableX + 12,
@@ -391,12 +205,21 @@ export const renderDocumentPdf = async (
         quantityWidth: 50
       };
 
-      doc.fillColor(colors.onPrimary).fontSize(10);
-      drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
-      drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
+      const drawHeader = (headerY: number): void => {
+        doc.fillColor(colors.primary).rect(tableX, headerY, tableWidth, 24).fill();
+        useFont(doc, fonts?.bold, "Helvetica-Bold");
+        doc.fillColor(colors.onPrimary).fontSize(10);
+        drawFixedText(doc, labels.item, columns.itemX, headerY + 7, { width: columns.itemWidth, align });
+        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 7, { width: columns.quantityWidth, align: "right" });
+      };
 
+      if (y + 24 > contentBottomY) {
+        doc.addPage();
+        y = PAGE.margin;
+      }
+      drawHeader(y);
       y += 24;
-      useFont(doc, options?.fonts?.regular, "Helvetica");
+      useFont(doc, fonts?.regular, "Helvetica");
       for (const item of items) {
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
@@ -404,6 +227,7 @@ export const renderDocumentPdf = async (
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
         ], 24);
+        y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
         drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + 8, {
@@ -429,14 +253,23 @@ export const renderDocumentPdf = async (
         amountWidth: 95
       };
 
-      doc.fillColor(colors.onPrimary).fontSize(10);
-      drawFixedText(doc, labels.item, columns.itemX, y + 7, { width: columns.itemWidth, align });
-      drawFixedText(doc, labels.quantity, columns.quantityX, y + 7, { width: columns.quantityWidth, align: "right" });
-      drawFixedText(doc, labels.unitPrice, columns.unitPriceX, y + 7, { width: columns.unitPriceWidth, align: "right" });
-      drawFixedText(doc, labels.amount, columns.amountX, y + 7, { width: columns.amountWidth, align: "right" });
+      const drawHeader = (headerY: number): void => {
+        doc.fillColor(colors.primary).rect(tableX, headerY, tableWidth, 24).fill();
+        useFont(doc, fonts?.bold, "Helvetica-Bold");
+        doc.fillColor(colors.onPrimary).fontSize(10);
+        drawFixedText(doc, labels.item, columns.itemX, headerY + 7, { width: columns.itemWidth, align });
+        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 7, { width: columns.quantityWidth, align: "right" });
+        drawFixedText(doc, labels.unitPrice, columns.unitPriceX, headerY + 7, { width: columns.unitPriceWidth, align: "right" });
+        drawFixedText(doc, labels.amount, columns.amountX, headerY + 7, { width: columns.amountWidth, align: "right" });
+      };
 
+      if (y + 24 > contentBottomY) {
+        doc.addPage();
+        y = PAGE.margin;
+      }
+      drawHeader(y);
       y += 24;
-      useFont(doc, options?.fonts?.regular, "Helvetica");
+      useFont(doc, fonts?.regular, "Helvetica");
       for (const item of items) {
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
@@ -444,6 +277,7 @@ export const renderDocumentPdf = async (
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
         ], 24);
+        y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
         drawFixedText(doc, itemLabel, columns.itemX, y + 8, {
@@ -500,10 +334,10 @@ export const renderDocumentPdf = async (
     let trailingBottomY = y;
 
     if (notes.length > 0) {
-      useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+      useFont(doc, fonts?.bold, "Helvetica-Bold");
       doc.fillColor(colors.mutedText).fontSize(10);
       drawFixedText(doc, labels.notes, PAGE.margin, y, { width: notesWidth, align });
-      useFont(doc, options?.fonts?.regular, "Helvetica");
+      useFont(doc, fonts?.regular, "Helvetica");
       doc.fillColor(colors.text).fontSize(9);
       trailingBottomY = drawFixedText(doc, notes.join("\n"), PAGE.margin, y + notesBodyOffsetY, {
         width: notesWidth,
@@ -517,7 +351,7 @@ export const renderDocumentPdf = async (
       doc.fillColor(isTotal ? colors.primary : "white").rect(totalsX, y, 220, 24).fill();
       doc.strokeColor(colors.border).lineWidth(1).rect(totalsX, y, 220, 24).stroke();
 
-      useFont(doc, isTotal ? options?.fonts?.bold : options?.fonts?.regular, isTotal ? "Helvetica-Bold" : "Helvetica");
+      useFont(doc, isTotal ? fonts?.bold : fonts?.regular, isTotal ? "Helvetica-Bold" : "Helvetica");
       doc.fillColor(isTotal ? colors.onPrimary : colors.text).fontSize(10);
       drawFixedText(doc, label, totalsX + 10, y + 7, { width: 105, align: "left" });
       drawFixedText(doc, truncateText(doc, value, 85), totalsX + 125, y + 7, { width: 85, align: "right" });
@@ -528,15 +362,15 @@ export const renderDocumentPdf = async (
     const notesHeight = 12 + 12 + doc.heightOfString(notes.join("\n"), { width: tableWidth, align, lineGap: 1 }) + 8;
     y = ensureSectionSpace(doc, y + trailingSectionGapY, notesHeight) - trailingSectionGapY;
     y += trailingSectionGapY;
-    useFont(doc, options?.fonts?.bold, "Helvetica-Bold");
+    useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.mutedText).fontSize(10);
     drawFixedText(doc, labels.notes, PAGE.margin, y, { width: tableWidth, align });
-    useFont(doc, options?.fonts?.regular, "Helvetica");
+    useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.text).fontSize(9);
     drawFixedText(doc, notes.join("\n"), PAGE.margin, y + notesBodyOffsetY, { width: tableWidth, align, lineGap: 1 });
   }
 
-  useFont(doc, options?.fonts?.regular, "Helvetica");
+  useFont(doc, fonts?.regular, "Helvetica");
   const actualPageHeight = doc.page.height ?? 841.89;
   const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
   const footerText = normalizeFooterText(document.footer ?? fallbackFooter);

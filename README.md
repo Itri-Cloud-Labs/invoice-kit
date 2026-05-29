@@ -16,6 +16,8 @@ It is designed for real business usage, not a demo. The package provides typed d
 - Lightweight runtime based on `pdfkit`
 - Clean factories for all document types
 - Automatic subtotal, discount, VAT, taxable base, and total calculations
+- Multi-page item tables for longer documents
+- Automated `node:test` coverage for totals, validation, sparse documents, and pagination
 - Moroccan defaults:
   - currency: `MAD`
   - VAT label: `TVA`
@@ -414,7 +416,7 @@ const quote = createQuote({
 
 ### Arabic PDF rendering
 
-Arabic labels are supported, but Arabic PDFs require Arabic-capable font files when calling `toPDF()`.
+Arabic labels are supported. The renderer first tries your explicit `toPDF({ fonts })` values, then falls back to common system Arabic fonts when available.
 
 ```ts
 await quote.toPDF({
@@ -426,7 +428,15 @@ await quote.toPDF({
 });
 ```
 
-Without custom fonts, Arabic glyph rendering is not reliable in PDF output.
+If no compatible system font is installed, provide Arabic-capable font files explicitly.
+
+Common fallback families the library tries automatically include Noto Naskh Arabic, Noto Sans Arabic, Amiri, and DejaVu Sans.
+
+## Testing
+
+- `npm test` builds the library and runs the automated `node:test` suite
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, and table pagination
+- `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
 
@@ -631,9 +641,8 @@ That means a release requires a version bump before pushing to `main`.
 
 ## Limitations
 
-- multi-page table layout is not implemented yet
 - remote logos currently support PNG/JPEG only
-- Arabic PDF output requires custom fonts
+- Arabic PDF output still depends on Arabic-capable fonts being installed or provided explicitly
 - delivery notes intentionally do not display financial values
 
 ## License

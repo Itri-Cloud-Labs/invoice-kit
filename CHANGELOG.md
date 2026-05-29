@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.9
+
+- Add automated unit tests for totals, validation, sparse documents, delivery note normalization, and pagination
+- Add multi-page item table rendering with repeated table headers on new pages
+- Extract shared PDF renderer helpers and add automatic fallback discovery for common Arabic system fonts
+
 ## 0.1.8
 
 - Add optional document color customization with named palette slots for accents, text, borders, and footer text
