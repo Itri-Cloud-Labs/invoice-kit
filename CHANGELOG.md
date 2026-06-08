@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.12
+
+- Fix wrapped issuer names so header details start below the rendered issuer title without overlapping
+
 ## 0.1.11
 
 - Add remote logo conversion for SVG and WEBP sources so `issuer.logo` is no longer limited to PNG and JPEG
