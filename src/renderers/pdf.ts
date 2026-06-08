@@ -37,7 +37,7 @@ export const renderDocumentPdf = async (
   const tableWidth = PAGE.width - PAGE.margin * 2;
   const logoFit: [number, number] = isDeliveryNote ? [80, 80] : [72, 72];
   const issuerNameOffsetY = isDeliveryNote ? 3 : 1;
-  const issuerDetailsOffsetY = isDeliveryNote ? 30 : 24;
+  const issuerNameGapY = isDeliveryNote ? 8 : 6;
   const titleMetaGapY = document.title ? 6 : 0;
   const metaRowGapY = 4;
   const sectionGapY = isDeliveryNote ? 22 : 14;
@@ -91,17 +91,16 @@ export const renderDocumentPdf = async (
   if (issuerName) {
     useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.primary).fontSize(17);
-    drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
+    issuerHeaderBottomY = drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
       width: issuerTextWidth,
       align
     });
-    issuerHeaderBottomY = PAGE.headerTop + issuerDetailsOffsetY - 2;
   }
 
   if (issuerLines.length > 0) {
     useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.text).fontSize(9);
-    issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, PAGE.headerTop + (issuerName ? issuerDetailsOffsetY : 0), {
+    issuerHeaderBottomY = drawFixedText(doc, issuerLines.join("\n"), issuerTextX, issuerName ? issuerHeaderBottomY + issuerNameGapY : PAGE.headerTop, {
       width: issuerTextWidth,
       align,
       lineGap: 1
