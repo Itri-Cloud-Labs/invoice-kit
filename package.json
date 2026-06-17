@@ -1,6 +1,6 @@
 {
   "name": "@ic-labs/invoice-kit",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Lightweight TypeScript library for generating Moroccan business documents as PDFs.",
   "author": "Itri Cloud Labs",
   "license": "MIT",
@@ -45,6 +45,7 @@
     "quote",
     "purchase-order",
     "delivery-note",
+    "return-note",
     "morocco",
     "pdf",
     "typescript"

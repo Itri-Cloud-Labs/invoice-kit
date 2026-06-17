@@ -7,11 +7,11 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
   validateDocumentInput(options);
 
   const locale = options.locale ?? "fr-MA";
-  const isDeliveryNote = options.type === "deliveryNote";
+  const isStockMovementDocument = options.type === "deliveryNote" || options.type === "returnNote";
   const items = (options.items ?? []).map(computeLineItem);
-  const discounts = isDeliveryNote ? [] : (options.discounts ?? []);
-  const vatRate = isDeliveryNote ? 0 : (options.vatRate ?? MOROCCO_DEFAULT_VAT_RATE);
-  const totals = !isDeliveryNote && items.length > 0 ? computeTotals(items, discounts, vatRate) : undefined;
+  const discounts = isStockMovementDocument ? [] : (options.discounts ?? []);
+  const vatRate = isStockMovementDocument ? 0 : (options.vatRate ?? MOROCCO_DEFAULT_VAT_RATE);
+  const totals = !isStockMovementDocument && items.length > 0 ? computeTotals(items, discounts, vatRate) : undefined;
 
   const data = {
     type: options.type,
@@ -24,7 +24,7 @@ const createBusinessDocument = (options: CreateDocumentOptions): BusinessDocumen
     ...(options.client ? { client: options.client } : {}),
     ...(items.length > 0 ? { items } : {}),
     ...(options.currency ? { currency: options.currency } : {}),
-    ...(!isDeliveryNote && items.length > 0 ? { vatRate } : {}),
+    ...(!isStockMovementDocument && items.length > 0 ? { vatRate } : {}),
     ...(discounts.length > 0 ? { discounts } : {}),
     ...(totals ? { totals } : {})
   };
@@ -47,3 +47,4 @@ export const createInvoice = withType("invoice");
 export const createQuote = withType("quote");
 export const createPurchaseOrder = withType("purchaseOrder");
 export const createDeliveryNote = withType("deliveryNote");
+export const createReturnNote = withType("returnNote");

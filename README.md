@@ -8,6 +8,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - `Devis` / quote
 - `Bon de commande` / purchase order
 - `Bon de livraison` / delivery note
+- `Bon de retour` / return note
 
 ## Features
 
@@ -31,7 +32,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - Remote logo URL support in PDF headers, including SVG and WEBP
 - Optional document color palette customization
 - Optional multiline footer rendered at the extreme bottom of the page
-- Delivery notes rendered without pricing information
+- Delivery and return notes rendered without pricing information
 
 ## Installation
 
@@ -91,7 +92,8 @@ import {
   createDeliveryNote,
   createInvoice,
   createPurchaseOrder,
-  createQuote
+  createQuote,
+  createReturnNote
 } from "@ic-labs/invoice-kit";
 ```
 
@@ -136,13 +138,17 @@ Creates a purchase order with pricing and totals.
 
 Creates a delivery note without pricing display in the PDF.
 
-Important behavior for delivery notes:
+### `createReturnNote(input)`
+
+Creates a Moroccan-style return note without pricing display in the PDF.
+
+Important behavior for delivery and return notes:
 
 - item prices are not required
 - pricing columns are hidden in the PDF
 - totals are hidden in the PDF
 - `discounts`, `vatRate`, `paymentTerms`, and `bankInfo` may exist in input but are not rendered as financial output
-- internal totals are normalized to zero for delivery notes
+- internal totals are normalized to zero for stock-movement documents
 
 ## Input Reference
 
@@ -433,7 +439,7 @@ You can still provide your own Arabic-capable font files explicitly when you wan
 ## Testing
 
 - `npm test` builds the library and runs the automated `node:test` suite
-- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery note normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery and return note normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
 - `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
@@ -501,6 +507,24 @@ Delivery notes render:
 - item tables remain quantity-only when items are present
 
 Delivery notes do not render:
+
+- unit price
+- amount
+- subtotal
+- discount
+- VAT
+- total
+- bank details
+- payment terms block
+
+### Return notes
+
+Return notes render:
+
+- only the modules you provide
+- item tables remain quantity-only when items are present
+
+Return notes do not render:
 
 - unit price
 - amount
@@ -614,6 +638,33 @@ const deliveryNote = createDeliveryNote({
 });
 ```
 
+### Return note without pricing
+
+```ts
+import { createReturnNote } from "@ic-labs/invoice-kit";
+
+const returnNote = createReturnNote({
+  issuer: {
+    name: "IC Labs SARL",
+    addressLines: ["Casablanca"]
+  },
+  seller: {
+    name: "IC Distribution SARL",
+    addressLines: ["Casablanca"]
+  },
+  client: {
+    name: "Client",
+    addressLines: ["Rabat"]
+  },
+  items: [
+    { name: "Laptop", quantity: 1, unit: "piece" },
+    { name: "Dock USB-C", quantity: 2, unit: "piece" }
+  ],
+  notes: "Retour marchandise suite a non-conformite.",
+  footer: "Bon pour retour\nSignature et cachet"
+});
+```
+
 ## Development
 
 Available scripts:
@@ -636,7 +687,7 @@ That means a release requires a version bump before pushing to `main`.
 
 ## Limitations
 
-- delivery notes intentionally do not display financial values
+- delivery and return notes intentionally do not display financial values
 
 ## License
 

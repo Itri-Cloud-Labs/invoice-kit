@@ -111,7 +111,7 @@ const validateColors = (colors: DocumentColors): void => {
 };
 
 export const validateDocumentInput = (input: CreateDocumentOptions): void => {
-  const requiresPricing = input.type !== "deliveryNote";
+  const requiresPricing = input.type !== "deliveryNote" && input.type !== "returnNote";
 
   if (input.number !== undefined) {
     assertNonEmptyString(input.number, "number");

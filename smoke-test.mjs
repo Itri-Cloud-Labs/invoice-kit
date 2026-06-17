@@ -3,7 +3,8 @@ import {
   createDeliveryNote,
   createInvoice,
   createPurchaseOrder,
-  createQuote
+  createQuote,
+  createReturnNote
 } from "./dist/index.js";
 
 const logoPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7i0AAAAASUVORK5CYII=";
@@ -287,10 +288,37 @@ try {
     footer: "IC Labs SARL"
   });
 
+  const returnNote = createReturnNote({
+    number: "BR-2026-0007",
+    title: "Bon de retour ",
+    locale: "fr-MA",
+    issueDate: new Date("2026-05-24T10:15:00Z"),
+    issuer: baseIssuer,
+    seller,
+    client,
+    items: [
+      {
+        name: "Laptop",
+        description: "Retour pour ecran endommage a la reception",
+        quantity: 1,
+        unit: "piece"
+      },
+      {
+        name: "Dock USB-C",
+        description: "Retour suite a incompatibilite reference chantier",
+        quantity: 2,
+        unit: "piece"
+      }
+    ],
+    notes: "Marchandise retournee au depot fournisseur pour controle.",
+    footer: "Bon pour retour\nSignature et cachet"
+  });
+
   await invoice.toPDF({ outputPath: "./sample-invoice.pdf" });
   await quote.toPDF({ outputPath: "./sample-quote.pdf" });
   await purchaseOrder.toPDF({ outputPath: "./sample-purchase-order.pdf" });
   await deliveryNote.toPDF({ outputPath: "./sample-delivery-note.pdf" });
+  await returnNote.toPDF({ outputPath: "./sample-return-note.pdf" });
   await sparseInvoice.toPDF({ outputPath: "./sample-sparse-invoice.pdf" });
 
   console.log({
@@ -298,6 +326,7 @@ try {
     quote: quote.toJSON(),
     purchaseOrder: purchaseOrder.toJSON(),
     deliveryNote: deliveryNote.toJSON(),
+    returnNote: returnNote.toJSON(),
     sparseInvoice: sparseInvoice.toJSON()
   });
 } finally {

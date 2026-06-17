@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 import sharp from "sharp";
-import { createDeliveryNote, createInvoice } from "../dist/index.js";
+import { createDeliveryNote, createInvoice, createReturnNote } from "../dist/index.js";
 
 const startTestServer = async (handler) => {
   const server = createServer(handler);
@@ -52,6 +52,21 @@ test("delivery notes accept quantity-only items and normalize prices to zero", (
   assert.equal(deliveryNote.items?.[0]?.unitPrice, 0);
   assert.equal(deliveryNote.items?.[0]?.lineTotal, 0);
   assert.ok(!("totals" in deliveryNote));
+});
+
+test("return notes accept quantity-only items and normalize prices to zero", () => {
+  const returnNote = createReturnNote({
+    items: [{ name: "Laptop", quantity: 2, unit: "piece" }],
+    discounts: [{ type: "fixed", value: 100 }],
+    vatRate: 0.2
+  }).toJSON();
+
+  assert.equal(returnNote.type, "returnNote");
+  assert.equal(returnNote.items?.[0]?.unitPrice, 0);
+  assert.equal(returnNote.items?.[0]?.lineTotal, 0);
+  assert.ok(!("vatRate" in returnNote));
+  assert.ok(!("discounts" in returnNote));
+  assert.ok(!("totals" in returnNote));
 });
 
 test("empty footer is rejected", () => {

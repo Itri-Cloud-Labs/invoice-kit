@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.13
+
+- Add Moroccan-style `Bon de retour` support with its own factory, localized title, and quantity-only PDF rendering
+- Treat return notes like delivery notes for validation and totals by omitting financial output and normalizing pricing to zero
+
 ## 0.1.12
 
 - Fix wrapped issuer names so header details start below the rendered issuer title without overlapping

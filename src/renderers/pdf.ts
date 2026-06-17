@@ -27,7 +27,7 @@ export const renderDocumentPdf = async (
   const colors = resolveColors(document.colors);
   const fonts = resolvePdfFonts(document, options);
   const isArabic = document.locale === "ar-MA";
-  const isDeliveryNote = document.type === "deliveryNote";
+  const isStockMovementDocument = document.type === "deliveryNote" || document.type === "returnNote";
   const align: "left" | "right" = isArabic ? "right" : "left";
   const leftColumnX = PAGE.margin;
   const rightColumnX = PAGE.margin + 275;
@@ -35,17 +35,17 @@ export const renderDocumentPdf = async (
   const metaTopX = rightColumnX;
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
-  const logoFit: [number, number] = isDeliveryNote ? [80, 80] : [72, 72];
-  const issuerNameOffsetY = isDeliveryNote ? 3 : 1;
-  const issuerNameGapY = isDeliveryNote ? 8 : 6;
+  const logoFit: [number, number] = isStockMovementDocument ? [80, 80] : [72, 72];
+  const issuerNameOffsetY = isStockMovementDocument ? 3 : 1;
+  const issuerNameGapY = isStockMovementDocument ? 8 : 6;
   const titleMetaGapY = document.title ? 6 : 0;
   const metaRowGapY = 4;
-  const sectionGapY = isDeliveryNote ? 22 : 14;
-  const sectionBodyOffsetY = isDeliveryNote ? 20 : 16;
-  const sectionAfterGapY = isDeliveryNote ? 20 : 14;
-  const bankSectionGapY = isDeliveryNote ? 16 : 10;
-  const bankSectionBodyOffsetY = isDeliveryNote ? 26 : 22;
-  const tableTopGapY = isDeliveryNote ? 18 : 12;
+  const sectionGapY = isStockMovementDocument ? 22 : 14;
+  const sectionBodyOffsetY = isStockMovementDocument ? 20 : 16;
+  const sectionAfterGapY = isStockMovementDocument ? 20 : 14;
+  const bankSectionGapY = isStockMovementDocument ? 16 : 10;
+  const bankSectionBodyOffsetY = isStockMovementDocument ? 26 : 22;
+  const tableTopGapY = isStockMovementDocument ? 18 : 12;
   const trailingSectionGapY = 14;
   const notesBodyOffsetY = 14;
   const trailingBottomGapY = 10;
@@ -109,7 +109,7 @@ export const renderDocumentPdf = async (
 
   const sellerLines = buildPartyLines(document.seller, labels);
   const clientLines = buildPartyLines(document.client, labels);
-  const bankLines = !isDeliveryNote && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
+  const bankLines = !isStockMovementDocument && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
 
   let titleBottomY = PAGE.headerTop;
   if (document.title) {
@@ -138,11 +138,11 @@ export const renderDocumentPdf = async (
   if (document.dueDate) {
     metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align, colors.metaText));
   }
-  if (!isDeliveryNote && document.currency) {
+  if (!isStockMovementDocument && document.currency) {
     metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.currency, document.currency, columnWidth, align, colors.metaText));
   }
 
-  const minimumHeaderBottomY = PAGE.headerTop + (isDeliveryNote ? 72 : 48);
+  const minimumHeaderBottomY = PAGE.headerTop + (isStockMovementDocument ? 72 : 48);
   const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, minimumHeaderBottomY);
   let y = headerBottomY + tableTopGapY;
   if (sellerLines.length > 0 || clientLines.length > 0 || bankLines) {
@@ -196,7 +196,7 @@ export const renderDocumentPdf = async (
   const items = document.items ?? [];
   const hasItems = items.length > 0;
   if (hasItems) {
-    if (isDeliveryNote) {
+    if (isStockMovementDocument) {
       const columns = {
         itemX: tableX + 12,
         itemWidth: 350,
@@ -303,17 +303,17 @@ export const renderDocumentPdf = async (
   }
 
   const notes: string[] = [];
-  if (!isDeliveryNote && document.paymentTerms?.label) {
+  if (!isStockMovementDocument && document.paymentTerms?.label) {
     notes.push(`${labels.paymentTerms}: ${document.paymentTerms.label}`);
   }
-  if (!isDeliveryNote && document.paymentTerms?.notes) {
+  if (!isStockMovementDocument && document.paymentTerms?.notes) {
     notes.push(document.paymentTerms.notes);
   }
   if (document.notes) {
     notes.push(`${labels.notes}: ${document.notes}`);
   }
 
-  if (!isDeliveryNote && document.totals) {
+  if (!isStockMovementDocument && document.totals) {
     const totalsHeight = (24 * 5) + 12;
     const notesWidth = tableWidth - 236;
     const notesHeight = notes.length > 0
