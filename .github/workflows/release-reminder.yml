@@ -7,7 +7,7 @@ on:
 
 jobs:
   remind-versioning:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: ${{ !contains(github.event.head_commit.message, 'chore(release)') }}
 
     steps:
