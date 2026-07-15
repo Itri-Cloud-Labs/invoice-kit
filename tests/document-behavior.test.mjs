@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { createDeliveryNote, createInvoice, createReturnNote } from "../dist/index.js";
 
@@ -93,6 +94,22 @@ test("Arabic PDFs render without explicit fonts thanks to the bundled fallback",
   });
 
   const pdfBytes = await invoice.toPDF();
+
+  assert.ok(pdfBytes.length > 0);
+});
+
+test("explicit font file paths work with the self-contained PDF runtime", async () => {
+  const regularFont = fileURLToPath(new URL(
+    "../node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf",
+    import.meta.url
+  ));
+  const invoice = createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    items: [{ name: "خدمة", quantity: 1, price: 100 }]
+  });
+
+  const pdfBytes = await invoice.toPDF({ fonts: { regular: regularFont } });
 
   assert.ok(pdfBytes.length > 0);
 });

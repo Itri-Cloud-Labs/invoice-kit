@@ -1,6 +1,6 @@
 {
   "name": "@ic-labs/invoice-kit",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Lightweight TypeScript library for generating Moroccan business documents as PDFs.",
   "author": "Itri Cloud Labs",
   "license": "MIT",
@@ -33,7 +33,7 @@
   },
   "scripts": {
     "clean": "node -e \"import('node:fs/promises').then((fs) => fs.rm('dist', { recursive: true, force: true }))\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/prepare-runtime-assets.mjs",
     "test": "npm run build && npm run test:unit",
     "test:unit": "node --test tests/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -51,13 +51,13 @@
     "typescript"
   ],
   "dependencies": {
-    "dejavu-fonts-ttf": "^2.37.3",
-    "pdfkit": "^0.17.2",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",
     "@types/pdfkit": "^0.17.3",
+    "dejavu-fonts-ttf": "2.37.3",
+    "pdfkit": "0.17.2",
     "typescript": "^5.8.3"
   }
 }

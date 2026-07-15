@@ -128,10 +128,12 @@ export interface BusinessDocumentData {
 export interface PdfRenderOptions {
   outputPath?: string;
   fonts?: {
-    regular?: string;
-    bold?: string;
+    regular?: PdfFontSource;
+    bold?: PdfFontSource;
   };
 }
+
+export type PdfFontSource = string | Uint8Array | ArrayBuffer;
 
 export interface TemplateLabels {
   documentTitle: string;

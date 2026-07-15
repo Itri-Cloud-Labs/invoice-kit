@@ -422,7 +422,7 @@ const quote = createQuote({
 
 ### Arabic PDF rendering
 
-Arabic labels are supported out of the box. The renderer first tries your explicit `toPDF({ fonts })` values, then falls back to bundled Arabic-capable DejaVu Sans fonts shipped through npm dependencies.
+Arabic labels are supported out of the box. The renderer first tries your explicit `toPDF({ fonts })` values, then falls back to DejaVu Sans font bytes embedded in the package. The fallback does not require font files from `node_modules` at runtime.
 
 ```ts
 await quote.toPDF({
@@ -434,7 +434,7 @@ await quote.toPDF({
 });
 ```
 
-You can still provide your own Arabic-capable font files explicitly when you want a different visual style.
+You can still provide your own Arabic-capable fonts when you want a different visual style. Custom font values may be filesystem paths, `Uint8Array` instances, or `ArrayBuffer` instances.
 
 ## Testing
 

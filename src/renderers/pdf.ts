@@ -1,4 +1,4 @@
-import PDFDocument from "pdfkit";
+import PDFDocument from "../vendor/pdfkit.cjs";
 import type { BusinessDocumentData, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
 import { formatDate, formatMoney } from "../utils/formatting.js";

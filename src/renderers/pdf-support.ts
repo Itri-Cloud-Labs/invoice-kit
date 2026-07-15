@@ -1,8 +1,26 @@
-import { createRequire } from "node:module";
-import type { BankInfo, BusinessDocumentData, DocumentColors, Party, PdfRenderOptions } from "../core/types.js";
+import { readFileSync } from "node:fs";
+import type { BankInfo, BusinessDocumentData, DocumentColors, Party, PdfFontSource, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
+import bundledFontBase64 from "../vendor/dejavu-fonts.cjs";
 
-const require = createRequire(import.meta.url);
+type PdfFontPair = { regular: PdfFontSource; bold: PdfFontSource };
+
+const STANDARD_PDF_FONTS = new Set([
+  "Courier",
+  "Courier-Bold",
+  "Courier-Oblique",
+  "Courier-BoldOblique",
+  "Helvetica",
+  "Helvetica-Bold",
+  "Helvetica-Oblique",
+  "Helvetica-BoldOblique",
+  "Times-Roman",
+  "Times-Bold",
+  "Times-Italic",
+  "Times-BoldItalic",
+  "Symbol",
+  "ZapfDingbats"
+]);
 
 export const PAGE = {
   margin: 48,
@@ -36,7 +54,7 @@ const isJpegBuffer = (buffer: Uint8Array): boolean =>
   && buffer[1] === 0xd8
   && buffer[2] === 0xff;
 
-const normalizeFontPair = (regular?: string, bold?: string): { regular: string; bold: string } | undefined => {
+const normalizeFontPair = (regular?: PdfFontSource, bold?: PdfFontSource): PdfFontPair | undefined => {
   if (!regular && !bold) {
     return undefined;
   }
@@ -47,17 +65,15 @@ const normalizeFontPair = (regular?: string, bold?: string): { regular: string; 
   };
 };
 
-const resolveBundledArabicFonts = (): { regular: string; bold: string } => {
-  try {
-    return {
-      regular: require.resolve("dejavu-fonts-ttf/ttf/DejaVuSans.ttf"),
-      bold: require.resolve("dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf")
-    };
-  } catch {
-    throw new Error(
-      "Unable to resolve the bundled Arabic font fallback. Reinstall dependencies or provide options.fonts.regular/options.fonts.bold explicitly."
-    );
-  }
+let bundledArabicFonts: PdfFontPair | undefined;
+
+const resolveBundledArabicFonts = (): PdfFontPair => {
+  bundledArabicFonts ??= {
+    regular: Buffer.from(bundledFontBase64.regular, "base64"),
+    bold: Buffer.from(bundledFontBase64.bold, "base64")
+  };
+
+  return bundledArabicFonts;
 };
 
 export const collectPdf = async (doc: PDFKit.PDFDocument): Promise<Uint8Array> =>
@@ -75,7 +91,7 @@ export const collectPdf = async (doc: PDFKit.PDFDocument): Promise<Uint8Array> =
     doc.on("error", reject);
   });
 
-export const fetchLogo = async (logoUrl: string): Promise<Buffer> => {
+export const fetchLogo = async (logoUrl: string): Promise<ArrayBuffer> => {
   const response = await fetch(logoUrl);
 
   if (!response.ok) {
@@ -87,13 +103,13 @@ export const fetchLogo = async (logoUrl: string): Promise<Buffer> => {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (isPngBuffer(buffer) || isJpegBuffer(buffer)) {
-    return buffer;
+    return arrayBuffer;
   }
 
   try {
     const { default: sharp } = await import("sharp");
     const pipeline = contentType.includes("svg") ? sharp(buffer, { density: 300 }) : sharp(buffer);
-    return await pipeline.png().toBuffer();
+    return new Uint8Array(await pipeline.png().toBuffer()).buffer;
   } catch {
     throw new Error(
       `Unsupported logo format at ${logoUrl}. Remote logos currently support PNG, JPEG, SVG, and WEBP.`
@@ -101,9 +117,12 @@ export const fetchLogo = async (logoUrl: string): Promise<Buffer> => {
   }
 };
 
-export const useFont = (doc: PDFKit.PDFDocument, fontPath: string | undefined, fallback: "Helvetica" | "Helvetica-Bold"): void => {
-  if (fontPath) {
-    doc.font(fontPath);
+export const useFont = (doc: PDFKit.PDFDocument, fontSource: PdfFontSource | undefined, fallback: "Helvetica" | "Helvetica-Bold"): void => {
+  if (fontSource) {
+    const resolvedFont = typeof fontSource === "string" && !STANDARD_PDF_FONTS.has(fontSource)
+      ? readFileSync(fontSource)
+      : fontSource;
+    doc.font(resolvedFont);
     return;
   }
 
@@ -113,7 +132,7 @@ export const useFont = (doc: PDFKit.PDFDocument, fontPath: string | undefined, f
 export const resolvePdfFonts = (
   document: BusinessDocumentData,
   options?: PdfRenderOptions
-): { regular?: string; bold?: string } | undefined => {
+): { regular?: PdfFontSource; bold?: PdfFontSource } | undefined => {
   const explicitFonts = normalizeFontPair(options?.fonts?.regular, options?.fonts?.bold);
 
   if (document.locale !== "ar-MA") {

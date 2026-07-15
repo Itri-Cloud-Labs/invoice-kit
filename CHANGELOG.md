@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.14
+
+- Use a vendored, self-contained PDFKit runtime with embedded built-in font metrics so ESM server bundles do not depend on CommonJS `__dirname` or PDFKit asset files
+- Embed the DejaVu Sans Arabic fallback fonts as runtime bytes so PDF generation does not depend on resolving font files from `node_modules`
+- Accept custom PDF fonts as filesystem paths, `Uint8Array` values, or `ArrayBuffer` values
+
 ## 0.1.13
 
 - Add Moroccan-style `Bon de retour` support with its own factory, localized title, and quantity-only PDF rendering
