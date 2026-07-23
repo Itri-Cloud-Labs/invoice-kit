@@ -151,6 +151,7 @@ export interface PdfSpacingOptions {
   detailLineGap?: number;
   tableHeaderHeight?: number;
   tableRowMinHeight?: number;
+  tableRowVerticalPadding?: number;
   tableTextTopPadding?: number;
   summaryRowHeight?: number;
   summaryBottomGap?: number;

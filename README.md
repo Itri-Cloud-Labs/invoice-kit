@@ -155,6 +155,7 @@ All values use PDF points (`72` points = `1` inch) and must be finite, non-negat
 | `detailLineGap` | `2` | Line spacing inside issuer, party, bank, and table details |
 | `tableHeaderHeight` | `28` | Item-table header height |
 | `tableRowMinHeight` | `30` | Minimum item-row height |
+| `tableRowVerticalPadding` | `16` | Total vertical padding added to wrapped item-row text |
 | `tableTextTopPadding` | `9` | Text offset from the top of item rows |
 | `summaryRowHeight` | `26` | Height of each totals row |
 | `summaryBottomGap` | `16` | Extra space below the left-side bank/notes content |

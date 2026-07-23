@@ -219,18 +219,20 @@ const getWrappedRowHeight = (
   text: string,
   width: number,
   minHeight: number,
-  options: PDFKit.Mixins.TextOptions
+  options: PDFKit.Mixins.TextOptions,
+  verticalPadding: number
 ): number => {
   const textHeight = doc.heightOfString(text, { ...options, width });
-  return Math.max(minHeight, Math.ceil(textHeight + 16));
+  return Math.max(minHeight, Math.ceil(textHeight + verticalPadding));
 };
 
 export const getMaxRowHeight = (
   doc: PDFKit.PDFDocument,
   cells: Array<{ text: string; width: number; options: PDFKit.Mixins.TextOptions }>,
-  minHeight: number
+  minHeight: number,
+  verticalPadding = 16
 ): number => cells.reduce((maxHeight, cell) => (
-  Math.max(maxHeight, getWrappedRowHeight(doc, cell.text, cell.width, minHeight, cell.options))
+  Math.max(maxHeight, getWrappedRowHeight(doc, cell.text, cell.width, minHeight, cell.options, verticalPadding))
 ), minHeight);
 
 export const buildPartyLines = (party: Party | undefined, labels: ReturnType<typeof getLabels>, includeName = true): string[] => {

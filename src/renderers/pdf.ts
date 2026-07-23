@@ -74,6 +74,11 @@ export const renderDocumentPdf = async (
   const detailLineGapY = resolveSpacing(spacing?.detailLineGap, 2, "detailLineGap");
   const tableHeaderHeight = resolveSpacing(spacing?.tableHeaderHeight, 28, "tableHeaderHeight");
   const tableRowMinHeight = resolveSpacing(spacing?.tableRowMinHeight, 30, "tableRowMinHeight");
+  const tableRowVerticalPadding = resolveSpacing(
+    spacing?.tableRowVerticalPadding,
+    16,
+    "tableRowVerticalPadding"
+  );
   const tableTextOffsetY = resolveSpacing(spacing?.tableTextTopPadding, 9, "tableTextTopPadding");
   const summaryRowHeight = resolveSpacing(spacing?.summaryRowHeight, 26, "summaryRowHeight");
   const contentBottomY = PAGE.height - PAGE.margin - 8;
@@ -239,7 +244,7 @@ export const renderDocumentPdf = async (
         const rowHeight = getMaxRowHeight(doc, [
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
-        ], tableRowMinHeight);
+        ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
@@ -289,7 +294,7 @@ export const renderDocumentPdf = async (
         const rowHeight = getMaxRowHeight(doc, [
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
-        ], tableRowMinHeight);
+        ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
