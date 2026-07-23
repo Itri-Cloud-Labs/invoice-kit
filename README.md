@@ -120,6 +120,47 @@ await invoice.toPDF({
 });
 ```
 
+### PDF spacing
+
+The current roomy layout is the default. You can override individual spacing values through `toPDF({ spacing })`; omitted values keep their defaults.
+
+```ts
+await invoice.toPDF({
+  outputPath: "./invoice.pdf",
+  spacing: {
+    headerToParties: 40,
+    partiesToTable: 30,
+    tableToSummary: 26,
+    detailLineGap: 3,
+    tableRowMinHeight: 34
+  }
+});
+```
+
+All values use PDF points (`72` points = `1` inch) and must be finite, non-negative numbers.
+
+| Option | Default | Controls |
+| --- | ---: | --- |
+| `issuerNameToDetails` | `10` | Issuer name to issuer address/details |
+| `titleToMetadata` | `10` | Document title to number/date metadata |
+| `metadataRowGap` | `7` | Space between metadata rows |
+| `headerToParties` | `30` (`34` for delivery/return notes) | Header to seller/client section |
+| `partyLabelToDetails` | `22` | Seller/client label to its details |
+| `partiesToTable` | `24` | Seller/client section to item table |
+| `headerToTable` | `20` (`24` for delivery/return notes) | Header to table when no party section exists |
+| `tableToSummary` | `20` | Table to the aligned bank/totals row |
+| `bankLabelToDetails` | `18` | Bank heading to bank details |
+| `bankToNotes` | `16` | Bank details to notes |
+| `notesLabelToDetails` | `18` | Notes heading to notes text |
+| `detailLineGap` | `2` | Line spacing inside issuer, party, bank, and table details |
+| `tableHeaderHeight` | `28` | Item-table header height |
+| `tableRowMinHeight` | `30` | Minimum item-row height |
+| `tableTextTopPadding` | `9` | Text offset from the top of item rows |
+| `summaryRowHeight` | `26` | Height of each totals row |
+| `summaryBottomGap` | `16` | Extra space below the left-side bank/notes content |
+
+Larger values may move sections to another page. Automatic table and section pagination remains active.
+
 ## Document Factories
 
 ### `createInvoice(input)`

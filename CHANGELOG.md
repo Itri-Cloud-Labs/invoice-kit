@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.15
+
+- Give issuer metadata, seller/client details, bank information, item tables, notes, and totals a more generous vertical rhythm
+- Increase table and summary row padding while preserving one-page output for standard invoices and automatic pagination for longer documents
+- Place bank details below the item table, aligned beside the totals summary instead of pushing it downward
+- Allow every major PDF spacing value to be overridden through `toPDF({ spacing })` while retaining the current layout as the default
+
 ## 0.1.14
 
 - Use a vendored, self-contained PDFKit runtime with embedded built-in font metrics so ESM server bundles do not depend on CommonJS `__dirname` or PDFKit asset files

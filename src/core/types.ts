@@ -131,9 +131,30 @@ export interface PdfRenderOptions {
     regular?: PdfFontSource;
     bold?: PdfFontSource;
   };
+  spacing?: PdfSpacingOptions;
 }
 
 export type PdfFontSource = string | Uint8Array | ArrayBuffer;
+
+export interface PdfSpacingOptions {
+  issuerNameToDetails?: number;
+  titleToMetadata?: number;
+  metadataRowGap?: number;
+  headerToParties?: number;
+  partyLabelToDetails?: number;
+  partiesToTable?: number;
+  headerToTable?: number;
+  tableToSummary?: number;
+  bankLabelToDetails?: number;
+  bankToNotes?: number;
+  notesLabelToDetails?: number;
+  detailLineGap?: number;
+  tableHeaderHeight?: number;
+  tableRowMinHeight?: number;
+  tableTextTopPadding?: number;
+  summaryRowHeight?: number;
+  summaryBottomGap?: number;
+}
 
 export interface TemplateLabels {
   documentTitle: string;

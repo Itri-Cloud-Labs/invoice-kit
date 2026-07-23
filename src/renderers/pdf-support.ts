@@ -222,7 +222,7 @@ const getWrappedRowHeight = (
   options: PDFKit.Mixins.TextOptions
 ): number => {
   const textHeight = doc.heightOfString(text, { ...options, width });
-  return Math.max(minHeight, Math.ceil(textHeight + 12));
+  return Math.max(minHeight, Math.ceil(textHeight + 16));
 };
 
 export const getMaxRowHeight = (

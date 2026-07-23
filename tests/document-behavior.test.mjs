@@ -98,6 +98,48 @@ test("Arabic PDFs render without explicit fonts thanks to the bundled fallback",
   assert.ok(pdfBytes.length > 0);
 });
 
+test("PDF spacing can be customized per render", async () => {
+  const invoice = createInvoice({
+    issuer: { name: "IC Labs SARL" },
+    seller: { name: "IC Distribution" },
+    client: { name: "Atlas Trading" },
+    items: [{ name: "Audit", quantity: 1, price: 100 }],
+    bankInfo: {
+      type: "local",
+      bankName: "Bank",
+      holderName: "IC Labs SARL",
+      rib: "001 002 003"
+    }
+  });
+
+  const pdfBytes = await invoice.toPDF({
+    spacing: {
+      headerToParties: 40,
+      partiesToTable: 30,
+      tableToSummary: 26,
+      detailLineGap: 3,
+      tableRowMinHeight: 34
+    }
+  });
+
+  assert.ok(pdfBytes.length > 0);
+});
+
+test("PDF spacing rejects negative and non-finite values", async () => {
+  const invoice = createInvoice({
+    items: [{ name: "Audit", quantity: 1, price: 100 }]
+  });
+
+  await assert.rejects(
+    invoice.toPDF({ spacing: { headerToParties: -1 } }),
+    /options\.spacing\.headerToParties must be a non-negative finite number/
+  );
+  await assert.rejects(
+    invoice.toPDF({ spacing: { titleToMetadata: Number.POSITIVE_INFINITY } }),
+    /options\.spacing\.titleToMetadata must be a non-negative finite number/
+  );
+});
+
 test("explicit font file paths work with the self-contained PDF runtime", async () => {
   const regularFont = fileURLToPath(new URL(
     "../node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf",
