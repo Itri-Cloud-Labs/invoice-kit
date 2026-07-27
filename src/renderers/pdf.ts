@@ -248,9 +248,10 @@ export const renderDocumentPdf = async (
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
-        drawFixedText(doc, truncateText(doc, itemLabel, columns.itemWidth), columns.itemX, y + tableTextOffsetY, {
+        drawFixedText(doc, itemLabel, columns.itemX, y + tableTextOffsetY, {
           width: columns.itemWidth,
-          align
+          align,
+          lineGap: detailLineGapY
         });
         drawFixedText(doc, quantityLabel, columns.quantityX, y + tableTextOffsetY, {
           width: columns.quantityWidth,
