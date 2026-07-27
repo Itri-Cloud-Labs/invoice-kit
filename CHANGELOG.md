@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1
+
+- Preserve complete product names in delivery and return notes by wrapping long item labels instead of shortening them with an ellipsis
+- Expand stock-movement rows to fit wrapped labels and keep subsequent rows from overlapping
+- Add regression coverage for long product names across every supported document type
+
 ## 0.1.15
 
 - Give issuer metadata, seller/client details, bank information, item tables, notes, and totals a more generous vertical rhythm
