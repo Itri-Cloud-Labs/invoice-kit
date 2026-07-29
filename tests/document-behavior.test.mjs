@@ -3,7 +3,13 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { createDeliveryNote, createInvoice, createReturnNote } from "../dist/index.js";
+import {
+  createDeliveryNote,
+  createInvoice,
+  createPriceRequest,
+  createReturnNote
+} from "../dist/index.js";
+import { createTemplateDefinition } from "../dist/templates/definitions.js";
 
 const startTestServer = async (handler) => {
   const server = createServer(handler);
@@ -68,6 +74,50 @@ test("return notes accept quantity-only items and normalize prices to zero", () 
   assert.ok(!("vatRate" in returnNote));
   assert.ok(!("discounts" in returnNote));
   assert.ok(!("totals" in returnNote));
+});
+
+test("price requests use a localized title and quantity-only items", () => {
+  const priceRequest = createPriceRequest({
+    items: [{
+      name: "Laptop",
+      quantity: 10,
+      unit: "piece",
+      price: 900,
+      discountRate: 0.1
+    }],
+    discounts: [{ type: "fixed", value: 100 }],
+    vatRate: 0.2,
+    paymentTerms: { label: "30 jours" },
+    bankInfo: {
+      type: "local",
+      bankName: "Bank",
+      holderName: "IC Labs",
+      rib: "001 002 003"
+    }
+  }).toJSON();
+
+  assert.equal(priceRequest.type, "priceRequest");
+  assert.equal(priceRequest.title, "Demande de prix");
+  assert.equal(priceRequest.items?.[0]?.unitPrice, 0);
+  assert.equal(priceRequest.items?.[0]?.lineSubtotal, 0);
+  assert.equal(priceRequest.items?.[0]?.lineDiscountAmount, 0);
+  assert.equal(priceRequest.items?.[0]?.lineTotal, 0);
+  assert.ok(!("vatRate" in priceRequest));
+  assert.ok(!("discounts" in priceRequest));
+  assert.ok(!("totals" in priceRequest));
+  assert.equal(createTemplateDefinition("priceRequest").getTitle("fr-MA"), "Demande de prix");
+  assert.equal(createTemplateDefinition("priceRequest").getTitle("ar-MA"), "طلب عرض أسعار");
+});
+
+test("price requests use the Arabic default title and preserve custom titles", () => {
+  assert.equal(
+    createPriceRequest({ locale: "ar-MA" }).toJSON().title,
+    "طلب عرض أسعار"
+  );
+  assert.equal(
+    createPriceRequest({ title: "Consultation fournisseurs" }).toJSON().title,
+    "Consultation fournisseurs"
+  );
 });
 
 test("empty footer is rejected", () => {

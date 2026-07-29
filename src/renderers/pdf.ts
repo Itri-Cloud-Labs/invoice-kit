@@ -1,5 +1,6 @@
 import PDFDocument from "../vendor/pdfkit.cjs";
 import type { BusinessDocumentData, PdfRenderOptions } from "../core/types.js";
+import { isQuantityOnlyDocument } from "../core/document-kinds.js";
 import { getLabels } from "../locales/index.js";
 import { formatDate, formatMoney } from "../utils/formatting.js";
 import {
@@ -39,7 +40,7 @@ export const renderDocumentPdf = async (
   const colors = resolveColors(document.colors);
   const fonts = resolvePdfFonts(document, options);
   const isArabic = document.locale === "ar-MA";
-  const isStockMovementDocument = document.type === "deliveryNote" || document.type === "returnNote";
+  const isQuantityOnly = isQuantityOnlyDocument(document.type);
   const align: "left" | "right" = isArabic ? "right" : "left";
   const leftColumnX = PAGE.margin;
   const rightColumnX = PAGE.margin + 275;
@@ -48,15 +49,15 @@ export const renderDocumentPdf = async (
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
   const spacing = options?.spacing;
-  const logoFit: [number, number] = isStockMovementDocument ? [80, 80] : [72, 72];
-  const issuerNameOffsetY = isStockMovementDocument ? 3 : 1;
+  const logoFit: [number, number] = isQuantityOnly ? [80, 80] : [72, 72];
+  const issuerNameOffsetY = isQuantityOnly ? 3 : 1;
   const issuerNameGapY = resolveSpacing(spacing?.issuerNameToDetails, 10, "issuerNameToDetails");
   const configuredTitleMetaGapY = resolveSpacing(spacing?.titleToMetadata, 10, "titleToMetadata");
   const titleMetaGapY = document.title ? configuredTitleMetaGapY : 0;
   const metaRowGapY = resolveSpacing(spacing?.metadataRowGap, 7, "metadataRowGap");
   const sectionGapY = resolveSpacing(
     spacing?.headerToParties,
-    isStockMovementDocument ? 34 : 30,
+    isQuantityOnly ? 34 : 30,
     "headerToParties"
   );
   const sectionBodyOffsetY = resolveSpacing(spacing?.partyLabelToDetails, 22, "partyLabelToDetails");
@@ -65,7 +66,7 @@ export const renderDocumentPdf = async (
   const bankNotesGapY = resolveSpacing(spacing?.bankToNotes, 16, "bankToNotes");
   const tableTopGapY = resolveSpacing(
     spacing?.headerToTable,
-    isStockMovementDocument ? 24 : 20,
+    isQuantityOnly ? 24 : 20,
     "headerToTable"
   );
   const trailingSectionGapY = resolveSpacing(spacing?.tableToSummary, 20, "tableToSummary");
@@ -141,7 +142,7 @@ export const renderDocumentPdf = async (
 
   const sellerLines = buildPartyLines(document.seller, labels);
   const clientLines = buildPartyLines(document.client, labels);
-  const bankLines = !isStockMovementDocument && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
+  const bankLines = !isQuantityOnly && document.bankInfo ? buildBankLines(document.bankInfo, labels) : null;
 
   let titleBottomY = PAGE.headerTop;
   if (document.title) {
@@ -170,11 +171,11 @@ export const renderDocumentPdf = async (
   if (document.dueDate) {
     metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align, colors.metaText));
   }
-  if (!isStockMovementDocument && document.currency) {
+  if (!isQuantityOnly && document.currency) {
     metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.currency, document.currency, columnWidth, align, colors.metaText));
   }
 
-  const minimumHeaderBottomY = PAGE.headerTop + (isStockMovementDocument ? 72 : 48);
+  const minimumHeaderBottomY = PAGE.headerTop + (isQuantityOnly ? 72 : 48);
   const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, minimumHeaderBottomY);
   let y = headerBottomY + tableTopGapY;
   if (sellerLines.length > 0 || clientLines.length > 0) {
@@ -215,7 +216,7 @@ export const renderDocumentPdf = async (
   const items = document.items ?? [];
   const hasItems = items.length > 0;
   if (hasItems) {
-    if (isStockMovementDocument) {
+    if (isQuantityOnly) {
       const columns = {
         itemX: tableX + 12,
         itemWidth: 350,
@@ -323,10 +324,10 @@ export const renderDocumentPdf = async (
   }
 
   const notes: string[] = [];
-  if (!isStockMovementDocument && document.paymentTerms?.label) {
+  if (!isQuantityOnly && document.paymentTerms?.label) {
     notes.push(`${labels.paymentTerms}: ${document.paymentTerms.label}`);
   }
-  if (!isStockMovementDocument && document.paymentTerms?.notes) {
+  if (!isQuantityOnly && document.paymentTerms?.notes) {
     notes.push(document.paymentTerms.notes);
   }
   if (document.notes) {
@@ -389,7 +390,7 @@ export const renderDocumentPdf = async (
     return leftBottomY;
   };
 
-  if (!isStockMovementDocument && document.totals) {
+  if (!isQuantityOnly && document.totals) {
     const totalsHeight = summaryRowHeight * 5;
     y = ensureSectionSpace(doc, y + trailingSectionGapY, Math.max(totalsHeight, leftDetailsHeight)) - trailingSectionGapY;
     const totalsX = PAGE.width - PAGE.margin - 220;

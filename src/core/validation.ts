@@ -1,4 +1,5 @@
 import type { BankInfo, CreateDocumentOptions, DiscountInput, DocumentColors, Issuer, LineItemInput, Party } from "./types.js";
+import { isQuantityOnlyDocument } from "./document-kinds.js";
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -111,7 +112,7 @@ const validateColors = (colors: DocumentColors): void => {
 };
 
 export const validateDocumentInput = (input: CreateDocumentOptions): void => {
-  const requiresPricing = input.type !== "deliveryNote" && input.type !== "returnNote";
+  const requiresPricing = !isQuantityOnlyDocument(input.type);
 
   if (input.number !== undefined) {
     assertNonEmptyString(input.number, "number");

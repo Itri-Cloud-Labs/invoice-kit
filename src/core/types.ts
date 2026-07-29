@@ -1,4 +1,10 @@
-export type DocumentType = "invoice" | "quote" | "purchaseOrder" | "deliveryNote" | "returnNote";
+export type DocumentType =
+  | "invoice"
+  | "quote"
+  | "purchaseOrder"
+  | "deliveryNote"
+  | "returnNote"
+  | "priceRequest";
 
 export type LocaleCode = "fr-MA" | "ar-MA";
 

@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import {
   createDeliveryNote,
   createInvoice,
+  createPriceRequest,
   createPurchaseOrder,
   createQuote,
   createReturnNote
@@ -314,11 +315,27 @@ try {
     footer: "Bon pour retour\nSignature et cachet"
   });
 
+  const priceRequest = createPriceRequest({
+    number: "DP-2026-0012",
+    locale: "fr-MA",
+    issueDate: new Date("2026-07-29T09:00:00Z"),
+    issuer: baseIssuer,
+    seller,
+    client,
+    items: [
+      { name: "Laptop professionnel 16 pouces", quantity: 10, unit: "piece" },
+      { name: "Dock USB-C", quantity: 10, unit: "piece" }
+    ],
+    notes: "Merci de communiquer vos meilleurs prix et delais de livraison.",
+    footer: "IC Labs SARL"
+  });
+
   await invoice.toPDF({ outputPath: "./sample-invoice.pdf" });
   await quote.toPDF({ outputPath: "./sample-quote.pdf" });
   await purchaseOrder.toPDF({ outputPath: "./sample-purchase-order.pdf" });
   await deliveryNote.toPDF({ outputPath: "./sample-delivery-note.pdf" });
   await returnNote.toPDF({ outputPath: "./sample-return-note.pdf" });
+  await priceRequest.toPDF({ outputPath: "./sample-price-request.pdf" });
   await sparseInvoice.toPDF({ outputPath: "./sample-sparse-invoice.pdf" });
 
   console.log({
@@ -327,6 +344,7 @@ try {
     purchaseOrder: purchaseOrder.toJSON(),
     deliveryNote: deliveryNote.toJSON(),
     returnNote: returnNote.toJSON(),
+    priceRequest: priceRequest.toJSON(),
     sparseInvoice: sparseInvoice.toJSON()
   });
 } finally {

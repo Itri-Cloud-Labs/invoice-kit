@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0
+
+- Add `createPriceRequest` for generating Moroccan `Demande de prix` documents
+- Render price requests with product and quantity columns only, normalizing supplied monetary fields to zero and omitting totals
+- Provide localized default titles in French (`Demande de prix`) and Arabic (`طلب عرض أسعار`), while allowing custom titles
+- Cover price-request normalization, localization, PDF wrapping, row expansion, and overlap prevention
+
 ## 0.2.1
 
 - Preserve complete product names in delivery and return notes by wrapping long item labels instead of shortening them with an ellipsis

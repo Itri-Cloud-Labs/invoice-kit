@@ -4,6 +4,7 @@ import { inflateSync } from "node:zlib";
 import {
   createDeliveryNote,
   createInvoice,
+  createPriceRequest,
   createPurchaseOrder,
   createQuote,
   createReturnNote
@@ -160,7 +161,8 @@ test("long item names wrap without ellipses in every supported document type", a
     ["quote", createQuote],
     ["purchase order", createPurchaseOrder],
     ["delivery note", createDeliveryNote],
-    ["return note", createReturnNote]
+    ["return note", createReturnNote],
+    ["price request", createPriceRequest]
   ];
 
   for (const [documentType, createDocument] of factories) {
@@ -196,7 +198,11 @@ test("long item names wrap without ellipses in every supported document type", a
       `${documentType} must place the subsequent row below the wrapped item name`
     );
 
-    if (documentType === "delivery note" || documentType === "return note") {
+    if (
+      documentType === "delivery note"
+      || documentType === "return note"
+      || documentType === "price request"
+    ) {
       const rowRectangles = readTableRectangles(pdfBytes).filter(({ height }) => height !== 28);
       assert.ok(
         rowRectangles.some(({ height }) => height > 30),

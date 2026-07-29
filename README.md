@@ -9,6 +9,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - `Bon de commande` / purchase order
 - `Bon de livraison` / delivery note
 - `Bon de retour` / return note
+- `Demande de prix` / price request
 
 ## Features
 
@@ -32,7 +33,7 @@ It is designed for real business usage, not a demo. The package provides typed d
 - Remote logo URL support in PDF headers, including SVG and WEBP
 - Optional document color palette customization
 - Optional multiline footer rendered at the extreme bottom of the page
-- Delivery and return notes rendered without pricing information
+- Delivery notes, return notes, and price requests rendered without pricing information
 
 ## Installation
 
@@ -91,6 +92,7 @@ await invoice.toPDF("./invoice.pdf");
 import {
   createDeliveryNote,
   createInvoice,
+  createPriceRequest,
   createPurchaseOrder,
   createQuote,
   createReturnNote
@@ -144,10 +146,10 @@ All values use PDF points (`72` points = `1` inch) and must be finite, non-negat
 | `issuerNameToDetails` | `10` | Issuer name to issuer address/details |
 | `titleToMetadata` | `10` | Document title to number/date metadata |
 | `metadataRowGap` | `7` | Space between metadata rows |
-| `headerToParties` | `30` (`34` for delivery/return notes) | Header to seller/client section |
+| `headerToParties` | `30` (`34` for quantity-only documents) | Header to seller/client section |
 | `partyLabelToDetails` | `22` | Seller/client label to its details |
 | `partiesToTable` | `24` | Seller/client section to item table |
-| `headerToTable` | `20` (`24` for delivery/return notes) | Header to table when no party section exists |
+| `headerToTable` | `20` (`24` for quantity-only documents) | Header to table when no party section exists |
 | `tableToSummary` | `20` | Table to the aligned bank/totals row |
 | `bankLabelToDetails` | `18` | Bank heading to bank details |
 | `bankToNotes` | `16` | Bank details to notes |
@@ -184,13 +186,17 @@ Creates a delivery note without pricing display in the PDF.
 
 Creates a Moroccan-style return note without pricing display in the PDF.
 
-Important behavior for delivery and return notes:
+### `createPriceRequest(input)`
+
+Creates a quantity-only `Demande de prix`. Its default title is localized as `Demande de prix` for `fr-MA` and `طلب عرض أسعار` for `ar-MA`; pass `title` to override it.
+
+Important behavior for delivery notes, return notes, and price requests:
 
 - item prices are not required
 - pricing columns are hidden in the PDF
 - totals are hidden in the PDF
 - `discounts`, `vatRate`, `paymentTerms`, and `bankInfo` may exist in input but are not rendered as financial output
-- internal totals are normalized to zero for stock-movement documents
+- internal item prices are normalized to zero for quantity-only documents
 
 ## Input Reference
 
@@ -331,7 +337,7 @@ interface LineItemInput {
 Notes:
 
 - financial documents only need `unitPrice` or `price` when you actually include priced items
-- delivery notes do not require pricing
+- delivery notes, return notes, and price requests do not require pricing
 - `discountRate` is a decimal ratio, for example:
   - `0.1` for 10%
   - `0.05` for 5%
@@ -481,7 +487,7 @@ You can still provide your own Arabic-capable fonts when you want a different vi
 ## Testing
 
 - `npm test` builds the library and runs the automated `node:test` suite
-- automated tests cover totals, VAT edge cases, validation, sparse document modules, delivery and return note normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, quantity-only document normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
 - `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
@@ -574,6 +580,26 @@ Return notes do not render:
 - discount
 - VAT
 - total
+- bank details
+- payment terms block
+
+### Price requests
+
+Price requests render:
+
+- a localized default title unless you provide a custom `title`
+- only the modules you provide
+- item tables with product names and quantities
+
+Price requests do not render:
+
+- unit price
+- amount
+- subtotal
+- discount
+- VAT
+- total
+- currency
 - bank details
 - payment terms block
 
@@ -707,6 +733,37 @@ const returnNote = createReturnNote({
 });
 ```
 
+### Price request without pricing
+
+```ts
+import { createPriceRequest } from "@ic-labs/invoice-kit";
+
+const priceRequest = createPriceRequest({
+  number: "DP-2026-0012",
+  issueDate: new Date("2026-07-29"),
+  issuer: {
+    name: "IC Labs SARL",
+    addressLines: ["Casablanca"]
+  },
+  seller: {
+    name: "IC Distribution SARL",
+    addressLines: ["Casablanca"]
+  },
+  client: {
+    name: "Fournisseur",
+    addressLines: ["Rabat"]
+  },
+  items: [
+    { name: "Laptop professionnel 16 pouces", quantity: 10, unit: "piece" },
+    { name: "Dock USB-C", quantity: 10, unit: "piece" }
+  ],
+  notes: "Merci de communiquer vos meilleurs prix et delais de livraison.",
+  footer: "IC Labs SARL"
+});
+
+await priceRequest.toPDF("./demande-de-prix.pdf");
+```
+
 ## Development
 
 Available scripts:
@@ -729,7 +786,7 @@ That means a release requires a version bump before pushing to `main`.
 
 ## Limitations
 
-- delivery and return notes intentionally do not display financial values
+- delivery notes, return notes, and price requests intentionally do not display financial values
 
 ## License
 
