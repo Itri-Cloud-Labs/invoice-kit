@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1-test.3
+
+- Match the npm trusted publisher's canonical GitHub repository identity
+- Follow npm's supported GitHub Actions setup for OIDC publication
+
 ## 0.3.1-test.2
 
 - Verify npm trusted publishing without token authentication injected by `actions/setup-node`
