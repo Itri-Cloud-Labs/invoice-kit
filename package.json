@@ -7,6 +7,13 @@
     "build:typescript": "npm run build --prefix packages/typescript",
     "test:typescript": "npm test --prefix packages/typescript",
     "smoke:typescript": "npm run smoke --prefix packages/typescript",
-    "pack:typescript": "npm pack --dry-run ./packages/typescript"
+    "pack:typescript": "npm pack --dry-run ./packages/typescript",
+    "install:python": "uv sync --project packages/python --frozen",
+    "lint:python": "uv run --project packages/python ruff check packages/python",
+    "typecheck:python": "uv run --project packages/python mypy packages/python/src",
+    "test:python": "uv run --project packages/python pytest packages/python/tests",
+    "build:python": "uv build --project packages/python",
+    "smoke:python": "uv run --project packages/python python packages/python/smoke_test.py",
+    "pack:python": "uv run --project packages/python twine check packages/python/dist/*"
   }
 }

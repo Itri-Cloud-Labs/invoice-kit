@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  verify:
+  typescript:
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
@@ -44,3 +44,64 @@ jobs:
       - name: Pack dry run
         run: npm pack --dry-run
         working-directory: packages/typescript
+
+  python:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.14"
+          enable-cache: true
+          cache-dependency-glob: packages/python/uv.lock
+
+      - name: Setup Python
+        run: uv python install "${{ matrix.python-version }}"
+
+      - name: Install dependencies
+        working-directory: packages/python
+        run: uv sync --frozen --python "${{ matrix.python-version }}"
+
+      - name: Lint and format
+        if: matrix.python-version == '3.12'
+        working-directory: packages/python
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Typecheck
+        if: matrix.python-version == '3.12'
+        working-directory: packages/python
+        run: uv run mypy src
+
+      - name: Unit tests
+        working-directory: packages/python
+        run: uv run pytest
+
+      - name: Smoke test
+        working-directory: packages/python
+        run: uv run python smoke_test.py
+
+      - name: Build and inspect distributions
+        working-directory: packages/python
+        run: |
+          uv build
+          uv run twine check dist/*
+
+      - name: Install wheel and sdist
+        working-directory: packages/python
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-env" --python "${{ matrix.python-version }}"
+          uv pip install --python "$RUNNER_TEMP/wheel-env/bin/python" dist/*.whl
+          "$RUNNER_TEMP/wheel-env/bin/python" -c "from invoice_kit import create_invoice; assert create_invoice().to_pdf().startswith(b'%PDF-')"
+          uv venv "$RUNNER_TEMP/sdist-env" --python "${{ matrix.python-version }}"
+          uv pip install --python "$RUNNER_TEMP/sdist-env/bin/python" dist/*.tar.gz
+          "$RUNNER_TEMP/sdist-env/bin/python" -c "import invoice_kit; assert invoice_kit.create_invoice"

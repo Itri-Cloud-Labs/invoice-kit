@@ -1,0 +1,42 @@
+{
+  "financial": {
+    "input": {
+      "items": [
+        { "name": "Consulting", "quantity": 2, "unit_price": 1000, "discount_rate": 0.1 },
+        { "name": "Hosting", "quantity": 1, "price": 500 }
+      ],
+      "discounts": [
+        { "type": "percentage", "value": 0.05 },
+        { "type": "fixed", "value": 25 }
+      ],
+      "vat_rate": 0.2,
+      "currency": "MAD"
+    },
+    "expected": {
+      "subtotal": 2500,
+      "discount_total": 340,
+      "taxable_base": 2160,
+      "vat_amount": 432,
+      "total": 2592
+    }
+  },
+  "quantity_only": {
+    "input": {
+      "items": [
+        { "name": "Boxes", "quantity": 3, "unit_price": 99, "discount_rate": 0.5 }
+      ],
+      "vat_rate": 0.2
+    },
+    "expected_item": {
+      "unit_price": 0,
+      "discount_rate": 0,
+      "line_subtotal": 0,
+      "line_discount_amount": 0,
+      "line_total": 0
+    }
+  },
+  "localization": {
+    "fr-MA": "Demande de prix",
+    "ar-MA": "طلب عرض أسعار"
+  }
+}

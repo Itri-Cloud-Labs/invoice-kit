@@ -1,0 +1,108 @@
+name: Release Python
+
+on:
+  push:
+    tags:
+      - "python-v*"
+
+concurrency:
+  group: release-python-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tagged commit belongs to main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "The release tag must point to a commit on main." >&2
+            exit 1
+          }
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.14"
+          enable-cache: false
+
+      - name: Setup Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        working-directory: packages/python
+        run: uv sync --frozen --python 3.12
+
+      - name: Resolve release metadata
+        id: release
+        working-directory: packages/python
+        run: uv run --frozen python scripts/release_metadata.py "$GITHUB_REF_NAME" "$GITHUB_OUTPUT"
+
+      - name: Extract release notes
+        working-directory: packages/python
+        run: uv run --frozen python scripts/release_notes.py "${{ steps.release.outputs.version }}" "$RUNNER_TEMP/release-notes.md"
+
+      - name: Set reproducible build timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")" >> "$GITHUB_ENV"
+
+      - name: Verify package
+        working-directory: packages/python
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src
+          uv run pytest
+          uv run python smoke_test.py
+
+      - name: Build artifacts
+        working-directory: packages/python
+        run: |
+          uv build
+          uv run twine check dist/*
+          sha256sum dist/*.whl dist/*.tar.gz > "$RUNNER_TEMP/SHA256SUMS"
+
+      - name: Check existing PyPI release
+        id: pypi
+        working-directory: packages/python
+        run: uv run python scripts/check_pypi.py ic-labs-invoice-kit "${{ steps.release.outputs.version }}" dist
+
+      - name: Attest build artifacts
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            packages/python/dist/*.whl
+            packages/python/dist/*.tar.gz
+
+      - name: Publish to PyPI
+        if: steps.pypi.outputs.publish == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python/dist
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          ASSETS=(packages/python/dist/*.whl packages/python/dist/*.tar.gz "$RUNNER_TEMP/SHA256SUMS")
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "Python v$VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+            gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+          else
+            FLAGS=()
+            if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" --verify-tag --title "Python v$VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" "${FLAGS[@]}"
+          fi
