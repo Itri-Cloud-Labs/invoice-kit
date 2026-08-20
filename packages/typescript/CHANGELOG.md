@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1-test.2
+
+- Verify npm trusted publishing without token authentication injected by `actions/setup-node`
+
 ## 0.3.1-test.1
 
 - Exercise the tag-based npm trusted publishing and GitHub Release workflow
