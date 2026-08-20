@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "packages/typescript/**"
 
 jobs:
   remind-versioning:
@@ -14,4 +16,4 @@ jobs:
       - name: Versioning note
         run: |
           echo "Publish workflow is enabled on push to main."
-          echo "If package.json version is unchanged from npm, publish will be skipped."
+          echo "If packages/typescript/package.json is unchanged from npm, publish will be skipped."

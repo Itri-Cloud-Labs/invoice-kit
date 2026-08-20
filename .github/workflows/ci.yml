@@ -19,21 +19,28 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: packages/typescript/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: packages/typescript
 
       - name: Typecheck
         run: npm run typecheck
+        working-directory: packages/typescript
 
       - name: Build
         run: npm run build
+        working-directory: packages/typescript
 
       - name: Unit tests
         run: npm run test:unit
+        working-directory: packages/typescript
 
       - name: Smoke test
         run: npm run smoke
+        working-directory: packages/typescript
 
       - name: Pack dry run
         run: npm pack --dry-run
+        working-directory: packages/typescript
