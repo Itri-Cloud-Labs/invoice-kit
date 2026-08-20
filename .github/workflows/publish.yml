@@ -33,11 +33,11 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: packages/typescript/package-lock.json
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Setup npm trusted publishing support
         run: npm install --global "npm@^11.5.1"
@@ -100,6 +100,7 @@ jobs:
           subject-path: ${{ steps.pack.outputs.tarball }}
 
       - name: Publish to npm
+        working-directory: packages/typescript
         env:
           PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
           PACKAGE_VERSION: ${{ steps.release.outputs.version }}
@@ -120,7 +121,7 @@ jobs:
 
             echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with the same artifact."
           else
-            npm publish "$TARBALL" --access public --tag "$NPM_TAG" --provenance
+            npm publish "$TARBALL" --access public --tag "$NPM_TAG" --provenance --loglevel verbose
           fi
 
       - name: Create or update GitHub Release
