@@ -1,18 +1,22 @@
-name: Publish to npm
+name: Release TypeScript
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "packages/typescript/**"
-      - ".github/workflows/publish.yml"
+    tags:
+      - "typescript-v*"
+
+concurrency:
+  group: release-typescript-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
     permissions:
-      contents: read
+      contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout
@@ -20,13 +24,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify tagged commit belongs to main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "The release tag must point to a commit on main." >&2
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
           cache: npm
           cache-dependency-path: packages/typescript/package-lock.json
+
+      - name: Setup npm trusted publishing support
+        run: npm install --global "npm@^11.5.1"
+
+      - name: Resolve release metadata
+        id: release
+        working-directory: packages/typescript
+        run: node scripts/release-metadata.mjs "$GITHUB_REF_NAME" "$GITHUB_OUTPUT"
+
+      - name: Extract release notes
+        working-directory: packages/typescript
+        run: node scripts/release-notes.mjs "${{ steps.release.outputs.version }}" "$RUNNER_TEMP/release-notes.md"
 
       - name: Install dependencies
         run: npm ci
@@ -48,37 +72,83 @@ jobs:
         run: npm run smoke
         working-directory: packages/typescript
 
-      - name: Check if version already exists
-        id: version_check
-        shell: bash
+      - name: Pack release artifact
+        id: pack
         working-directory: packages/typescript
         run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+          RELEASE_DIR="$RUNNER_TEMP/typescript-release"
+          mkdir -p "$RELEASE_DIR"
+          npm pack --pack-destination "$RELEASE_DIR"
+
+          TARBALL=$(find "$RELEASE_DIR" -maxdepth 1 -type f -name '*.tgz' -print -quit)
+          if [ -z "$TARBALL" ]; then
+            echo "npm pack did not produce a tarball." >&2
+            exit 1
           fi
 
-      - name: Check npm auth availability
-        id: auth_check
-        shell: bash
-        run: |
-          if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
-          fi
+          CHECKSUM="$TARBALL.sha256"
+          (
+            cd "$RELEASE_DIR"
+            sha256sum "$(basename "$TARBALL")" > "$(basename "$CHECKSUM")"
+          )
 
-      - name: Publish
-        if: steps.version_check.outputs.exists == 'false' && steps.auth_check.outputs.has_token == 'true'
-        run: npm publish
-        working-directory: packages/typescript
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+
+      - name: Attest release artifact
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+
+      - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish skipped notice
-        if: steps.version_check.outputs.exists == 'false' && steps.auth_check.outputs.has_token != 'true'
+          PACKAGE_NAME: ${{ steps.release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ steps.release.outputs.version }}
+          NPM_TAG: ${{ steps.release.outputs.npm_tag }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
         run: |
-          echo "NPM_TOKEN is not configured. Skipping npm publish."
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            REGISTRY_TARBALL=$(npm view "$PACKAGE_NAME@$PACKAGE_VERSION" dist.tarball)
+            DOWNLOADED_TARBALL="$RUNNER_TEMP/published-package.tgz"
+            curl --fail --location --silent --show-error "$REGISTRY_TARBALL" --output "$DOWNLOADED_TARBALL"
+
+            LOCAL_CHECKSUM=$(sha256sum "$TARBALL" | cut -d ' ' -f 1)
+            PUBLISHED_CHECKSUM=$(sha256sum "$DOWNLOADED_TARBALL" | cut -d ' ' -f 1)
+            if [ "$LOCAL_CHECKSUM" != "$PUBLISHED_CHECKSUM" ]; then
+              echo "npm already contains $PACKAGE_NAME@$PACKAGE_VERSION with different package contents." >&2
+              exit 1
+            fi
+
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published with the same artifact."
+          else
+            npm publish "$TARBALL" --access public --tag "$NPM_TAG" --provenance
+          fi
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ runner.temp }}/release-notes.md
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+          CHECKSUM: ${{ steps.pack.outputs.checksum }}
+          VERSION: ${{ steps.release.outputs.version }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "TypeScript v$VERSION" \
+              --notes-file "$RELEASE_NOTES"
+            gh release upload "$GITHUB_REF_NAME" "$TARBALL" "$CHECKSUM" --clobber
+          else
+            RELEASE_FLAGS=()
+            if [ "$PRERELEASE" = "true" ]; then
+              RELEASE_FLAGS+=(--prerelease)
+            fi
+
+            gh release create "$GITHUB_REF_NAME" \
+              "$TARBALL" \
+              "$CHECKSUM" \
+              --verify-tag \
+              --title "TypeScript v$VERSION" \
+              --notes-file "$RELEASE_NOTES" \
+              "${RELEASE_FLAGS[@]}"
+          fi

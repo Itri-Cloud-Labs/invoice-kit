@@ -31,6 +31,21 @@ npm run pack:typescript
 
 See the [TypeScript package documentation](./packages/typescript/README.md) for its API and usage.
 
+## Releasing TypeScript
+
+TypeScript releases use npm for package installation and GitHub Releases for release notes and downloadable artifacts. Ordinary pushes to `main` never publish packages.
+
+To publish a release:
+
+1. Update `packages/typescript/package.json` and `packages/typescript/CHANGELOG.md` in a pull request.
+2. Merge the pull request after CI passes.
+3. Tag the merged commit as `typescript-v<version>` and push the tag.
+4. Confirm the npm publication and matching GitHub Release.
+
+The tag version must match the package version, and the changelog must contain a non-empty `## <version>` section. Stable versions publish under npm's `latest` tag. Prerelease versions publish under `next` and create a GitHub prerelease.
+
+Publishing uses npm trusted publishing. The npm package must trust `.github/workflows/publish.yml` in this repository with the `npm` GitHub environment.
+
 ## License
 
 MIT
