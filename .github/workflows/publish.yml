@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "packages/typescript/**"
+      - ".github/workflows/publish.yml"
 
 jobs:
   publish:
@@ -23,25 +26,32 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
           cache: npm
+          cache-dependency-path: packages/typescript/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: packages/typescript
 
       - name: Typecheck
         run: npm run typecheck
+        working-directory: packages/typescript
 
       - name: Build
         run: npm run build
+        working-directory: packages/typescript
 
       - name: Unit tests
         run: npm run test:unit
+        working-directory: packages/typescript
 
       - name: Smoke test
         run: npm run smoke
+        working-directory: packages/typescript
 
       - name: Check if version already exists
         id: version_check
         shell: bash
+        working-directory: packages/typescript
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
@@ -64,6 +74,7 @@ jobs:
       - name: Publish
         if: steps.version_check.outputs.exists == 'false' && steps.auth_check.outputs.has_token == 'true'
         run: npm publish
+        working-directory: packages/typescript
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
