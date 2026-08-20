@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1-test.1
+
+- Exercise the tag-based npm trusted publishing and GitHub Release workflow
+
 ## 0.3.0
 
 - Add `createPriceRequest` for generating Moroccan `Demande de prix` documents
