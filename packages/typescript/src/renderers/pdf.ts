@@ -82,7 +82,6 @@ export const renderDocumentPdf = async (
   );
   const tableTextOffsetY = resolveSpacing(spacing?.tableTextTopPadding, 9, "tableTextTopPadding");
   const summaryRowHeight = resolveSpacing(spacing?.summaryRowHeight, 26, "summaryRowHeight");
-  const contentBottomY = PAGE.height - PAGE.margin - 8;
 
   // pdfkit is chosen because it stays lightweight while supporting custom TTF/OTF fonts,
   // which is necessary for Arabic-capable PDF output in a Node-only library.
@@ -99,6 +98,17 @@ export const renderDocumentPdf = async (
 
   const pdfBytesPromise = collectPdf(doc);
   const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
+  const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
+  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
+  const footerOptions = {
+    width: tableWidth,
+    align: "center" as const,
+    lineGap: 1
+  };
+  useFont(doc, fonts?.regular, "Helvetica");
+  doc.fontSize(8);
+  const footerHeight = footerText.length > 0 ? doc.heightOfString(footerText, footerOptions) : 0;
+  const contentBottomY = PAGE.height - Math.max(PAGE.margin + 8, footerHeight + 8);
   const issuerTextX = leftColumnX + (logoBuffer ? 92 : 0);
   const issuerTextWidth = logoBuffer ? 148 : 240;
   const ensureTableRowSpace = (currentY: number, rowHeight: number, drawHeader: (headerY: number) => void): number => {
@@ -176,7 +186,8 @@ export const renderDocumentPdf = async (
   }
 
   const minimumHeaderBottomY = PAGE.headerTop + (isQuantityOnly ? 72 : 48);
-  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, minimumHeaderBottomY);
+  const logoBottomY = logoBuffer ? PAGE.headerTop + logoFit[1] : PAGE.headerTop;
+  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, logoBottomY, minimumHeaderBottomY);
   let y = headerBottomY + tableTopGapY;
   if (sellerLines.length > 0 || clientLines.length > 0) {
     const sectionsTopY = headerBottomY + sectionGapY;
@@ -243,8 +254,8 @@ export const renderDocumentPdf = async (
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
         const rowHeight = getMaxRowHeight(doc, [
-          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
@@ -294,8 +305,8 @@ export const renderDocumentPdf = async (
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
         const rowHeight = getMaxRowHeight(doc, [
-          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
@@ -392,7 +403,12 @@ export const renderDocumentPdf = async (
 
   if (!isQuantityOnly && document.totals) {
     const totalsHeight = summaryRowHeight * 5;
-    y = ensureSectionSpace(doc, y + trailingSectionGapY, Math.max(totalsHeight, leftDetailsHeight)) - trailingSectionGapY;
+    y = ensureSectionSpace(
+      doc,
+      y + trailingSectionGapY,
+      Math.max(totalsHeight, leftDetailsHeight),
+      contentBottomY
+    ) - trailingSectionGapY;
     const totalsX = PAGE.width - PAGE.margin - 220;
     const totals = [
       [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency ?? "MAD")],
@@ -419,24 +435,17 @@ export const renderDocumentPdf = async (
     });
     y = Math.max(totalsY, trailingBottomY + trailingBottomGapY);
   } else if (leftDetailsHeight > 0) {
-    y = ensureSectionSpace(doc, y + trailingSectionGapY, leftDetailsHeight) - trailingSectionGapY;
+    y = ensureSectionSpace(doc, y + trailingSectionGapY, leftDetailsHeight, contentBottomY) - trailingSectionGapY;
     y += trailingSectionGapY;
     y = drawLeftDetails(y);
   }
 
   useFont(doc, fonts?.regular, "Helvetica");
   const actualPageHeight = doc.page.height ?? 841.89;
-  const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
-  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
-  const footerOptions = {
-    width: tableWidth,
-    align: "center" as const,
-    lineGap: 1
-  };
   if (footerText.length > 0) {
-    const footerHeight = doc.heightOfString(footerText, footerOptions);
+    doc.fontSize(8);
     doc.page.margins.bottom = 0;
-    doc.fillColor(colors.footerText).fontSize(8);
+    doc.fillColor(colors.footerText);
     drawFixedText(doc, footerText, PAGE.margin, actualPageHeight - footerHeight, footerOptions);
   }
 
