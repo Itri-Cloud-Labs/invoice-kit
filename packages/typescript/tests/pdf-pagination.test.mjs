@@ -211,3 +211,30 @@ test("long item names wrap without ellipses in every supported document type", a
     }
   }
 });
+
+test("a long item name keeps vertical padding before the row border", async () => {
+  const longName =
+    "ENTRETIEN GENERALE DES CLIMATISEURS CENTRE GAUTHIER / SPLIT SYSTEME FROID ET CHAUD suivant article de contrat: Nettoyage du condenseur. Nettoyage des filtres. Nettoyage d'evaporateur. Verification la charge frigorifique. Verification des liaison electrique. Verification ecoulement et de vidange appareils.";
+  const pdfBytes = await createInvoice({
+    items: [{ name: longName, quantity: 21, unit: "unite", price: 245 }]
+  }).toPDF();
+  const blocks = readPdfTextBlocks(pdfBytes);
+  const renderedText = blocks.map(({ text }) => text).join("");
+  const itemStart = renderedText.indexOf(longName);
+  let textOffset = 0;
+  const itemLines = blocks.filter(({ text }) => {
+    const blockStart = textOffset;
+    const blockEnd = textOffset + text.length;
+    textOffset = blockEnd;
+    return blockEnd > itemStart && blockStart < itemStart + longName.length;
+  });
+  const [rowRectangle] = readTableRectangles(pdfBytes).filter(({ height }) => height !== 28);
+  const renderedLineSpan = itemLines[0].y - itemLines.at(-1).y;
+
+  assert.ok(itemLines.length > 1, "expected the item name to wrap across lines");
+  assert.ok(rowRectangle, "expected an item row border");
+  assert.ok(
+    rowRectangle.height - renderedLineSpan >= 26,
+    `expected the wrapped text to retain its line box and configured vertical padding inside the row border; got ${rowRectangle.height - renderedLineSpan} points`
+  );
+});

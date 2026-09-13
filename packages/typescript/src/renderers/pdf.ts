@@ -243,8 +243,8 @@ export const renderDocumentPdf = async (
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
         const rowHeight = getMaxRowHeight(doc, [
-          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
@@ -294,8 +294,8 @@ export const renderDocumentPdf = async (
         const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
         const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
         const rowHeight = getMaxRowHeight(doc, [
-          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: 1 } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: 1 } }
+          { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
         y = ensureTableRowSpace(y, rowHeight, drawHeader);
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
