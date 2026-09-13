@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.2
+
+- Preserve row padding when long item names wrap across multiple lines
+- Reserve multiline footer space from item tables, totals, and notes
+- Keep item tables below header logos and make footer placement independent of preceding content
+
 ## 0.3.1-test.3
 
 - Match the npm trusted publisher's canonical GitHub repository identity
