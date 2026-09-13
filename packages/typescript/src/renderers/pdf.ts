@@ -403,7 +403,12 @@ export const renderDocumentPdf = async (
 
   if (!isQuantityOnly && document.totals) {
     const totalsHeight = summaryRowHeight * 5;
-    y = ensureSectionSpace(doc, y + trailingSectionGapY, Math.max(totalsHeight, leftDetailsHeight)) - trailingSectionGapY;
+    y = ensureSectionSpace(
+      doc,
+      y + trailingSectionGapY,
+      Math.max(totalsHeight, leftDetailsHeight),
+      contentBottomY
+    ) - trailingSectionGapY;
     const totalsX = PAGE.width - PAGE.margin - 220;
     const totals = [
       [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency ?? "MAD")],
@@ -430,7 +435,7 @@ export const renderDocumentPdf = async (
     });
     y = Math.max(totalsY, trailingBottomY + trailingBottomGapY);
   } else if (leftDetailsHeight > 0) {
-    y = ensureSectionSpace(doc, y + trailingSectionGapY, leftDetailsHeight) - trailingSectionGapY;
+    y = ensureSectionSpace(doc, y + trailingSectionGapY, leftDetailsHeight, contentBottomY) - trailingSectionGapY;
     y += trailingSectionGapY;
     y = drawLeftDetails(y);
   }

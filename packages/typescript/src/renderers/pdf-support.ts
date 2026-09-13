@@ -184,9 +184,12 @@ export const normalizeFooterText = (footer: string): string =>
     .map((line) => line.trim())
     .join("\n");
 
-export const ensureSectionSpace = (doc: PDFKit.PDFDocument, y: number, requiredHeight: number): number => {
-  const contentBottom = PAGE.height - PAGE.margin - 8;
-
+export const ensureSectionSpace = (
+  doc: PDFKit.PDFDocument,
+  y: number,
+  requiredHeight: number,
+  contentBottom = PAGE.height - PAGE.margin - 8
+): number => {
   if (y + requiredHeight <= contentBottom) {
     return y;
   }

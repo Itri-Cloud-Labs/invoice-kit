@@ -274,6 +274,16 @@ test("a tall footer is reserved from the item table", async () => {
   assert.equal(countPdfPages(tallFooterPdf), 2, "expected the tall footer to move table content to a new page");
 });
 
+test("a tall footer is reserved from trailing notes and totals", async () => {
+  const pdfBytes = await createInvoice({
+    items: [{ name: "Audit", quantity: 1, price: 100 }],
+    notes: Array.from({ length: 48 }, (_, index) => `NOTE LINE ${index + 1}`).join("\n"),
+    footer: Array.from({ length: 10 }, (_, index) => `FOOTER LINE ${index + 1}`).join("\n")
+  }).toPDF();
+
+  assert.equal(countPdfPages(pdfBytes), 2, "expected trailing content to move above the reserved footer area");
+});
+
 test("the item table starts below a header logo", async () => {
   const originalFetch = globalThis.fetch;
   const logo = Buffer.from(
