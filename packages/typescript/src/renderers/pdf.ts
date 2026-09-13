@@ -82,7 +82,6 @@ export const renderDocumentPdf = async (
   );
   const tableTextOffsetY = resolveSpacing(spacing?.tableTextTopPadding, 9, "tableTextTopPadding");
   const summaryRowHeight = resolveSpacing(spacing?.summaryRowHeight, 26, "summaryRowHeight");
-  const contentBottomY = PAGE.height - PAGE.margin - 8;
 
   // pdfkit is chosen because it stays lightweight while supporting custom TTF/OTF fonts,
   // which is necessary for Arabic-capable PDF output in a Node-only library.
@@ -99,6 +98,17 @@ export const renderDocumentPdf = async (
 
   const pdfBytesPromise = collectPdf(doc);
   const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
+  const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
+  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
+  const footerOptions = {
+    width: tableWidth,
+    align: "center" as const,
+    lineGap: 1
+  };
+  useFont(doc, fonts?.regular, "Helvetica");
+  doc.fontSize(8);
+  const footerHeight = footerText.length > 0 ? doc.heightOfString(footerText, footerOptions) : 0;
+  const contentBottomY = PAGE.height - Math.max(PAGE.margin + 8, footerHeight + 8);
   const issuerTextX = leftColumnX + (logoBuffer ? 92 : 0);
   const issuerTextWidth = logoBuffer ? 148 : 240;
   const ensureTableRowSpace = (currentY: number, rowHeight: number, drawHeader: (headerY: number) => void): number => {
@@ -176,7 +186,8 @@ export const renderDocumentPdf = async (
   }
 
   const minimumHeaderBottomY = PAGE.headerTop + (isQuantityOnly ? 72 : 48);
-  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, minimumHeaderBottomY);
+  const logoBottomY = logoBuffer ? PAGE.headerTop + logoFit[1] : PAGE.headerTop;
+  const headerBottomY = Math.max(metaBottomY, issuerHeaderBottomY, logoBottomY, minimumHeaderBottomY);
   let y = headerBottomY + tableTopGapY;
   if (sellerLines.length > 0 || clientLines.length > 0) {
     const sectionsTopY = headerBottomY + sectionGapY;
@@ -426,17 +437,10 @@ export const renderDocumentPdf = async (
 
   useFont(doc, fonts?.regular, "Helvetica");
   const actualPageHeight = doc.page.height ?? 841.89;
-  const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
-  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
-  const footerOptions = {
-    width: tableWidth,
-    align: "center" as const,
-    lineGap: 1
-  };
   if (footerText.length > 0) {
-    const footerHeight = doc.heightOfString(footerText, footerOptions);
+    doc.fontSize(8);
     doc.page.margins.bottom = 0;
-    doc.fillColor(colors.footerText).fontSize(8);
+    doc.fillColor(colors.footerText);
     drawFixedText(doc, footerText, PAGE.margin, actualPageHeight - footerHeight, footerOptions);
   }
 

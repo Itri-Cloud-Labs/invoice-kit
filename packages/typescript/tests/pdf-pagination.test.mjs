@@ -238,3 +238,62 @@ test("a long item name keeps vertical padding before the row border", async () =
     `expected the wrapped text to retain its line box and configured vertical padding inside the row border; got ${rowRectangle.height - renderedLineSpan} points`
   );
 });
+
+test("footer placement does not depend on preceding document content", async () => {
+  const footer = "IC Labs SARL\ncontact@iclabs.ma\n+212600000000";
+  const sparsePdf = await createInvoice({ footer }).toPDF();
+  const detailedPdf = await createInvoice({
+    footer,
+    items: [{ name: "Audit", quantity: 1, price: 100 }]
+  }).toPDF();
+  const getFooterTop = (bytes) => {
+    const footerBlock = readPdfTextBlocks(bytes).find(({ text }) => text.includes("IC Labs SARL"));
+    assert.ok(footerBlock, "expected the footer text to be rendered");
+    return footerBlock.y;
+  };
+
+  assert.equal(
+    getFooterTop(sparsePdf),
+    getFooterTop(detailedPdf),
+    "expected the same footer to occupy the same bottom-aligned position"
+  );
+});
+
+test("a tall footer is reserved from the item table", async () => {
+  const items = Array.from({ length: 19 }, (_, index) => ({
+    name: `Item ${index + 1}`,
+    quantity: 1
+  }));
+  const shortFooterPdf = await createDeliveryNote({ items, footer: "Short footer" }).toPDF();
+  const tallFooterPdf = await createDeliveryNote({
+    items,
+    footer: Array.from({ length: 10 }, (_, index) => `FOOTER LINE ${index + 1}`).join("\n")
+  }).toPDF();
+
+  assert.equal(countPdfPages(shortFooterPdf), 1, "expected the fixture to fit with a short footer");
+  assert.equal(countPdfPages(tallFooterPdf), 2, "expected the tall footer to move table content to a new page");
+});
+
+test("the item table starts below a header logo", async () => {
+  const originalFetch = globalThis.fetch;
+  const logo = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64"
+  );
+  globalThis.fetch = async () => new Response(logo, {
+    headers: { "content-type": "image/png" }
+  });
+
+  try {
+    const pdfBytes = await createInvoice({
+      issuer: { logo: "https://example.test/logo.png" },
+      items: [{ name: "Audit", quantity: 1, price: 100 }]
+    }).toPDF();
+    const [tableHeader] = readTableRectangles(pdfBytes).filter(({ height }) => height === 28);
+
+    assert.ok(tableHeader, "expected an item table header");
+    assert.ok(tableHeader.y >= 114, "expected the table to start below the 72-point logo");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
