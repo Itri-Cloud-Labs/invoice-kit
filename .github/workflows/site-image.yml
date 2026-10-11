@@ -71,3 +71,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # Coolify pulls the freshly pushed image. Skipped for pull requests, which publish nothing.
+      - name: Redeploy on Coolify
+        if: github.event_name != 'pull_request'
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          curl --fail --silent --show-error --retry 3 \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "https://coolify.itri.cloud/api/v1/deploy?uuid=uowhywatqdy4c4nb5n3vmu0m&force=false"
