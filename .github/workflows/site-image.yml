@@ -78,6 +78,11 @@ jobs:
         env:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          curl --fail --silent --show-error --retry 3 \
+          curl --fail-with-body --silent --show-error --retry 3 \
+            --request POST \
             --header "Authorization: Bearer $COOLIFY_TOKEN" \
-            "https://coolify.itri.cloud/api/v1/deploy?uuid=uowhywatqdy4c4nb5n3vmu0m&force=false"
+            --header "Content-Type: application/json" \
+            --header "Accept: application/json" \
+            --data '{"uuid":"uowhywatqdy4c4nb5n3vmu0m","force":false}' \
+            --write-out '\nHTTP %{http_code}\n' \
+            "https://coolify.itri.cloud/api/v1/deploy"
