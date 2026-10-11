@@ -7,6 +7,10 @@
     "build:typescript": "npm run build --prefix packages/typescript",
     "test:typescript": "npm test --prefix packages/typescript",
     "smoke:typescript": "npm run smoke --prefix packages/typescript",
-    "pack:typescript": "npm pack --dry-run ./packages/typescript"
+    "pack:typescript": "npm pack --dry-run ./packages/typescript",
+    "install:site": "npm ci --prefix site",
+    "dev:site": "npm run dev --prefix site",
+    "build:site": "npm run build --prefix site",
+    "samples:site": "npm run samples --prefix site"
   }
 }
