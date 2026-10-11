@@ -33,7 +33,7 @@ See the [TypeScript package documentation](./packages/typescript/README.md) for 
 
 ## Website
 
-The marketing site lives in `site/` (Vite, plain TypeScript, no framework). Its live document preview imports the totals, validation, and label modules directly from `packages/typescript/src`, so the figures and error messages on the page come from the library code.
+The marketing site lives in `site/` (Vite, React, Tailwind CSS v4). Its live document preview imports the totals, validation, and label modules directly from `packages/typescript/src`, so the figures and error messages on the page come from the library code.
 
 ```bash
 npm run install:site

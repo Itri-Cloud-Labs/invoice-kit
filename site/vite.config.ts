@@ -1,4 +1,6 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 // The site imports the library's pure modules (totals, validation, labels)
@@ -7,6 +9,7 @@ const kitSource = fileURLToPath(new URL("../packages/typescript/src", import.met
 
 export default defineConfig({
   base: "./",
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@kit": kitSource }
   },

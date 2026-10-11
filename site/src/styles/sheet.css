@@ -20,6 +20,14 @@
   box-sizing: border-box;
 }
 
+/* The stage measures blocks right after each render, so nothing on the page may
+   ease into place: the reduced-motion rule would otherwise give every change a
+   0.01ms transition and the measurements would read the previous layout. */
+.pg,
+.pg * {
+  transition-property: none;
+}
+
 /* PDFKit puts the baseline 0.718em under the line top and adds lineGap after the
    line. Browsers centre the glyphs in the line box, hence the upward nudge. */
 .tx {
@@ -126,5 +134,12 @@
 .pg-ghost {
   position: absolute;
   margin: 0;
+  pointer-events: none;
+}
+
+/* Holds the fading copies of blocks that left the page. React never renders into it. */
+.pg-ghosts {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
 }

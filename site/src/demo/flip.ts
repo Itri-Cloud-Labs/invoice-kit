@@ -1,17 +1,17 @@
-// Swaps one rendered page for another and carries the keyed blocks across:
-// blocks that stay glide to their new place, new ones fade in, dropped ones fade out.
+// Carries the keyed blocks of the page across a re-render: blocks that stay
+// glide to their new place, new ones fade in, dropped ones fade out.
 
 const LEAVES = "[data-key]:not([data-key='header']):not([data-key='parties']):not([data-key='table']):not([data-key='trailing'])";
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 
-interface Box {
+export interface Box {
   left: number;
   top: number;
   width: number;
   node: HTMLElement;
 }
 
-const measure = (page: HTMLElement): Map<string, Box> => {
+export const measure = (page: HTMLElement): Map<string, Box> => {
   const origin = page.getBoundingClientRect();
   const scale = origin.width / page.offsetWidth || 1;
   const boxes = new Map<string, Box>();
@@ -27,17 +27,9 @@ const measure = (page: HTMLElement): Map<string, Box> => {
   return boxes;
 };
 
-export const swapPage = (host: HTMLElement, next: HTMLElement, animate: boolean): void => {
-  const previous = host.firstElementChild as HTMLElement | null;
-  if (!previous || !animate) {
-    host.replaceChildren(next);
-    return;
-  }
-
-  const before = measure(previous);
-  host.replaceChildren(next);
-  const after = measure(next);
-
+// `before` holds the boxes of the previous render. React has already detached the
+// blocks that left, so they are cloned into `ghosts` to fade out where they stood.
+export const animateSwap = (ghosts: HTMLElement, before: Map<string, Box>, after: Map<string, Box>): void => {
   for (const [name, box] of after) {
     const old = before.get(name);
     if (!old) {
@@ -63,7 +55,7 @@ export const swapPage = (host: HTMLElement, next: HTMLElement, animate: boolean)
     ghost.style.left = `${box.left}px`;
     ghost.style.top = `${box.top}px`;
     ghost.style.width = `${box.width}px`;
-    next.append(ghost);
+    ghosts.append(ghost);
     ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: "ease-in", fill: "forwards" }).finished
       .then(() => ghost.remove())
       .catch(() => ghost.remove());

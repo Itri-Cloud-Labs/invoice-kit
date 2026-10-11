@@ -1,0 +1,221 @@
+/* invoice-kit site. Ink on coloured stock: the page takes the colour of the
+   document being previewed, and the sheet itself stays white. */
+
+@import "tailwindcss";
+@import "./sheet.css" layer(components);
+
+@custom-variant short (@media (max-height: 50rem));
+
+@property --ground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(0.92 0.13 99);
+}
+
+@theme {
+  --color-*: initial;
+  --color-white: #fff;
+
+  --color-stock-facture: oklch(0.92 0.13 99);
+  --color-stock-devis: oklch(0.87 0.085 8);
+  --color-stock-commande: oklch(0.86 0.115 70);
+  --color-stock-livraison: oklch(0.88 0.085 155);
+  --color-stock-retour: oklch(0.87 0.065 232);
+  --color-stock-prix: oklch(0.86 0.07 305);
+
+  /* Mixes stay in oklab: in oklch the navy and yellow meet in green. */
+  --color-ground: var(--ground);
+  --color-ink: oklch(0.29 0.09 258);
+  --color-ink-band: oklch(0.25 0.085 258);
+  --color-ink-raised: oklch(0.33 0.09 258);
+  --color-ink-soft: color-mix(in oklab, var(--color-ink) 82%, var(--ground));
+  --color-line: color-mix(in oklab, var(--color-ink) 30%, var(--ground));
+  --color-lift: color-mix(in oklab, var(--ground) 50%, white);
+  --color-well: color-mix(in oklab, var(--ground) 90%, var(--color-ink));
+  --color-signal: oklch(0.6 0.21 31);
+  --color-signal-ink: oklch(0.43 0.17 30);
+
+  --color-on-ink: color-mix(in oklab, var(--ground) 45%, white);
+  --color-on-band: color-mix(in oklab, var(--ground) 30%, white);
+  --color-band-line: color-mix(in oklab, var(--ground) 30%, var(--color-ink-band));
+  --color-install-line: color-mix(in oklab, var(--ground) 40%, var(--color-ink));
+  --color-tok-kw: oklch(0.8 0.07 250);
+  --color-tok-key: color-mix(in oklab, var(--ground) 25%, white);
+  --color-tok-note: oklch(0.74 0.05 255);
+
+  --font-display: "Besley Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Fragment Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --spacing-gutter: clamp(1.25rem, 4vw, 4rem);
+  --spacing-section: clamp(4.5rem, 9vw, 8.5rem);
+
+  --breakpoint-wide: 68.75rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --shadow-sheet:
+    0 0 0 1px color-mix(in oklab, var(--color-ink) 16%, transparent),
+    0 7px 0 -3px var(--color-lift),
+    0 7px 0 -2px var(--color-line),
+    0 14px 0 -6px var(--color-lift),
+    0 14px 0 -5px var(--color-line);
+
+  --animate-rise: rise 0.9s var(--ease-out) backwards;
+  --animate-rise-late: rise 0.7s var(--ease-out) 0.9s backwards;
+  --animate-feed: feed 1.1s var(--ease-out) 0.15s backwards;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(1.1rem);
+    }
+  }
+
+  @keyframes feed {
+    from {
+      clip-path: inset(0 0 100% 0);
+      transform: translateY(-2.5rem);
+    }
+    to {
+      clip-path: inset(0 0 -2rem 0);
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  html {
+    --ground: var(--color-stock-facture);
+    background: var(--ground);
+    color: var(--color-ink);
+    line-height: 1.55;
+    scroll-behavior: smooth;
+    transition: --ground 0.7s ease;
+  }
+
+  html[data-kind="devis"] { --ground: var(--color-stock-devis); }
+  html[data-kind="commande"] { --ground: var(--color-stock-commande); }
+  html[data-kind="livraison"] { --ground: var(--color-stock-livraison); }
+  html[data-kind="retour"] { --ground: var(--color-stock-retour); }
+  html[data-kind="prix"] { --ground: var(--color-stock-prix); }
+
+  body {
+    font-size: 1.0625rem;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: clamp(1.95rem, 1.3rem + 2vw, 3rem);
+    font-weight: 720;
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+  }
+
+  p code,
+  dd code {
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--ground);
+  }
+
+  input:disabled {
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+      transition: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Native control parts that utilities cannot reach. */
+@layer components {
+  .range {
+    width: 100%;
+    height: 1.75rem;
+    margin: 0;
+    background: none;
+    appearance: none;
+    cursor: ew-resize;
+  }
+
+  .range::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--color-ink);
+  }
+
+  .range::-moz-range-track {
+    height: 2px;
+    background: var(--color-ink);
+  }
+
+  .range::-webkit-slider-thumb {
+    width: 0.7rem;
+    height: 1.35rem;
+    margin-top: calc(-0.675rem + 1px);
+    border: 0;
+    border-radius: 2px;
+    background: var(--color-ink);
+    appearance: none;
+    transition: scale 0.15s;
+  }
+
+  .range::-moz-range-thumb {
+    width: 0.7rem;
+    height: 1.35rem;
+    border: 0;
+    border-radius: 2px;
+    background: var(--color-ink);
+  }
+
+  .range:active::-webkit-slider-thumb {
+    scale: 1.15;
+  }
+
+  .range[data-active]::-webkit-slider-thumb {
+    background: var(--color-signal-ink);
+  }
+
+  .range[data-active]::-moz-range-thumb {
+    background: var(--color-signal-ink);
+  }
+
+  .swatch::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .swatch::-webkit-color-swatch {
+    border: 0;
+    border-radius: 2px;
+  }
+
+  .swatch::-moz-color-swatch {
+    border: 0;
+    border-radius: 2px;
+  }
+}
