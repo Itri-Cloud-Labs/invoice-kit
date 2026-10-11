@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+.git
+.github
+*.log
+packages/typescript/tests
+packages/typescript/sample-*.pdf
