@@ -1,0 +1,130 @@
+/* The document preview. 1px = 1 PDF point; the stage scales the whole page. */
+
+.pg {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 595.28px;
+  height: 841.89px;
+  padding: 42px 48px 0;
+  overflow: hidden;
+  background: #fff;
+  font-family: Arial, "Liberation Sans", "Nimbus Sans", Helvetica, sans-serif;
+  font-kerning: normal;
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+}
+
+.pg * {
+  box-sizing: border-box;
+}
+
+/* PDFKit puts the baseline 0.718em under the line top and adds lineGap after the
+   line. Browsers centre the glyphs in the line box, hence the upward nudge. */
+.tx {
+  --shift: calc(var(--fs) * 0.206px + var(--lg, 0) * 0.5px);
+  flex: none;
+  margin-top: calc(var(--top, 0) * 1px - var(--shift));
+  margin-bottom: var(--shift);
+  font-size: calc(var(--fs) * 1px);
+  line-height: calc(var(--fs) * 1.156px + var(--lg, 0) * 1px);
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.tx--bold {
+  font-weight: 700;
+}
+
+.tx--clip {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pg-col {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.pg-header,
+.pg-parties,
+.pg-trailing {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+}
+
+.pg-brand {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+}
+
+.pg-logo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  object-fit: contain;
+  object-position: left top;
+}
+
+.pg-table {
+  flex: none;
+}
+
+.pg-thead,
+.pg-row,
+.pg-total {
+  position: relative;
+  display: grid;
+  align-items: start;
+}
+
+.pg-thead {
+  padding-top: 8px;
+}
+
+/* PDFKit strokes each row rectangle on its edge, so neighbours share a line. */
+.pg-row::after,
+.pg-total::after {
+  position: absolute;
+  inset: -0.5px;
+  border: 1px solid var(--pg-border);
+  content: "";
+  pointer-events: none;
+}
+
+.pg-totals {
+  flex: none;
+  margin-left: auto;
+}
+
+.pg-total {
+  grid-template-columns: 10px 105px 10px 85px;
+  padding-top: 9px;
+}
+
+.pg-total > :first-child {
+  grid-column: 2;
+}
+
+.pg-total > :last-child {
+  grid-column: 4;
+}
+
+.pg-footer {
+  position: absolute;
+  bottom: 0;
+  left: 48px;
+}
+
+.pg-ghost {
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}

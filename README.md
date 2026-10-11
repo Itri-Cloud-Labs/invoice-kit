@@ -31,6 +31,23 @@ npm run pack:typescript
 
 See the [TypeScript package documentation](./packages/typescript/README.md) for its API and usage.
 
+## Website
+
+The marketing site lives in `site/` (Vite, plain TypeScript, no framework). Its live document preview imports the totals, validation, and label modules directly from `packages/typescript/src`, so the figures and error messages on the page come from the library code.
+
+```bash
+npm run install:site
+npm run dev:site
+npm run build:site
+```
+
+The downloadable PDFs in `site/public/samples` are produced by the built library. After changing the renderer or the demo data in `site/src/demo/sample-data.js`, rebuild the package and regenerate them:
+
+```bash
+npm run build:typescript
+npm run samples:site
+```
+
 ## Releasing TypeScript
 
 TypeScript releases use npm for package installation and GitHub Releases for release notes and downloadable artifacts. Ordinary pushes to `main` never publish packages.

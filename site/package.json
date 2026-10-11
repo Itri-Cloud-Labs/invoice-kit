@@ -1,0 +1,21 @@
+{
+  "name": "invoice-kit-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Website for invoice-kit.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "samples": "node scripts/generate-samples.mjs"
+  },
+  "devDependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/besley": "^5.3.0",
+    "@fontsource/fragment-mono": "^5.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
