@@ -133,10 +133,13 @@ export const useFont = (doc: PDFKit.PDFDocument, fontSource: PdfFontSource | und
 
 const useFallbackFont = (doc: PDFKit.PDFDocument, state: TextState): string => {
   const weight = state.bold ? "bold" : "regular";
-  const name = FALLBACK_FONT_NAMES[weight];
   const source = resolveBundledArabicFonts()[weight];
+  // The bundled font may already be registered under another name (it is the default for
+  // `ar-MA` documents), so reuse that registration instead of registering it twice.
+  let name = state.registered.get(source);
 
-  if (!state.registered.has(source)) {
+  if (!name) {
+    name = FALLBACK_FONT_NAMES[weight];
     doc.registerFont(name, source as Buffer);
     state.registered.set(source, name);
   }
@@ -146,6 +149,29 @@ const useFallbackFont = (doc: PDFKit.PDFDocument, state: TextState): string => {
 };
 
 const reverseCharacters = (text: string): string => Array.from(text).reverse().join("");
+
+// A run needs the fallback font when any character is missing, not just the first: a
+// supplied font can cover the opening letter yet omit a later letter or combining mark.
+// Whitespace and bidi controls carry no glyph, so they are skipped.
+const fontFaceCoversText = (font: ActiveFont["font"], text: string): boolean => {
+  if (!font?.hasGlyphForCodePoint) {
+    return false;
+  }
+
+  for (const character of text) {
+    const codePoint = character.codePointAt(0);
+
+    if (codePoint === undefined || /^\s$/.test(character) || stripBidiControls(character).length === 0) {
+      continue;
+    }
+
+    if (font.hasGlyphForCodePoint(codePoint) !== true) {
+      return false;
+    }
+  }
+
+  return true;
+};
 
 // Shapes one directional run. The run is handed to the font engine as a whole so Arabic
 // letters join across spaces, and the engine's own direction guess is corrected when it
@@ -159,9 +185,8 @@ const shapePiece = (doc: PDFKit.PDFDocument, state: TextState, logicalText: stri
   }
 
   let font = state.font;
-  const rtlCharacter = RTL_CHARACTERS.exec(logicalText)?.[0];
 
-  if (rtlCharacter && activeFont(doc).font?.hasGlyphForCodePoint?.(rtlCharacter.codePointAt(0) ?? 0) !== true) {
+  if (hasRtlText(logicalText) && !fontFaceCoversText(activeFont(doc).font, logicalText)) {
     font = useFallbackFont(doc, state);
   }
 
@@ -245,6 +270,35 @@ const layoutParagraph = (doc: PDFKit.PDFDocument, state: TextState, text: string
   let lineStart: number | undefined;
   let current: Line | undefined;
 
+  // A single word can be wider than the available width (a long email, reference, or
+  // unit). Split it into character chunks so no line is drawn past the column. The last
+  // chunk stays open so a following word can still join it.
+  const splitOversizedWord = (wordStart: number, wordEnd: number): Array<{ line: Line; start: number }> => {
+    const chunks: Array<{ line: Line; start: number }> = [];
+    let chunkStart = wordStart;
+
+    while (chunkStart < wordEnd) {
+      let fitEnd = chunkStart + 1;
+      let fitLine = build(chunkStart, fitEnd);
+
+      for (let end = chunkStart + 2; end <= wordEnd; end += 1) {
+        const candidate = build(chunkStart, end);
+
+        if (candidate.width > width) {
+          break;
+        }
+
+        fitEnd = end;
+        fitLine = candidate;
+      }
+
+      chunks.push({ line: fitLine, start: chunkStart });
+      chunkStart = fitEnd;
+    }
+
+    return chunks;
+  };
+
   for (const word of words) {
     if (lineStart !== undefined && current) {
       const candidate = build(lineStart, word.end);
@@ -257,8 +311,25 @@ const layoutParagraph = (doc: PDFKit.PDFDocument, state: TextState, text: string
       lines.push(current);
     }
 
-    lineStart = word.start;
-    current = build(lineStart, word.end);
+    const wordLine = build(word.start, word.end);
+
+    if (wordLine.width <= width) {
+      lineStart = word.start;
+      current = wordLine;
+      continue;
+    }
+
+    const chunks = splitOversizedWord(word.start, word.end);
+    const lastChunk = chunks.pop();
+
+    for (const chunk of chunks) {
+      lines.push(chunk.line);
+    }
+
+    if (lastChunk) {
+      lineStart = lastChunk.start;
+      current = lastChunk.line;
+    }
   }
 
   lines.push(current ?? { pieces: [], width: 0 });
@@ -317,24 +388,34 @@ export const drawText = (
     const lineHeight = lineHeightOf(doc, options);
     const baselineOffset = (activeFont(doc).ascender / 1000) * (doc as unknown as { _fontSize: number })._fontSize;
     const align = (options.align ?? "left") as TextAlign;
+    let lineTopY = y;
 
-    lines.forEach((line, lineIndex) => {
+    for (const line of lines) {
+      // A long block (notes, bank details) can exceed one page. Continue at the top of a
+      // fresh page instead of drawing the remaining lines below the page edge.
+      if (lineTopY + lineHeight > doc.page.maxY()) {
+        doc.addPage();
+        lineTopY = doc.page.margins.top;
+      }
+
       const freeWidth = (options.width ?? line.width) - line.width;
       let pieceX = x + (align === "right" ? freeWidth : align === "center" ? freeWidth / 2 : 0);
 
       for (const piece of line.pieces) {
         doc.font(piece.font);
-        doc.text(piece.text, pieceX, y + lineIndex * lineHeight + baselineOffset, {
+        doc.text(piece.text, pieceX, lineTopY + baselineOffset, {
           lineBreak: false,
           baseline: "alphabetic",
           features: []
         });
         pieceX += piece.width;
       }
-    });
+
+      lineTopY += lineHeight;
+    }
 
     doc.font(state.font);
-    bottomY = y + lines.length * lineHeight;
+    bottomY = lineTopY;
   }
 
   doc.x = previousX;

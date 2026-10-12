@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { inflateSync } from "node:zlib";
 import { createInvoice, getLabels } from "../dist/index.js";
-import { buildBankLines, buildPartyLines, resolvePdfFonts } from "../dist/renderers/pdf-support.js";
+import { PAGE, buildBankLines, buildPartyLines, resolvePdfFonts } from "../dist/renderers/pdf-support.js";
 import {
   formatLabelValue,
   isolate,
   layoutVisualLines,
   measureTextWidth,
+  resolveBundledArabicFonts,
   setTextDirection,
   useFont
 } from "../dist/renderers/pdf-text.js";
@@ -20,6 +22,59 @@ const createDoc = (direction, { bundledFont = true } = {}) => {
   doc.fontSize(10);
   return doc;
 };
+
+const countPdfPages = (bytes) => {
+  const pageMatches = Buffer.from(bytes).toString("latin1").match(/\/Type \/Page\b/g);
+  return pageMatches?.length ?? 0;
+};
+
+const readPdfContentStreams = (bytes) => {
+  const pdf = Buffer.from(bytes);
+  const streamMarker = Buffer.from("stream\n");
+  const endMarker = Buffer.from("\nendstream");
+  const streams = [];
+  let offset = 0;
+
+  while (offset < pdf.length) {
+    const start = pdf.indexOf(streamMarker, offset);
+    if (start === -1) break;
+    const contentStart = start + streamMarker.length;
+    const end = pdf.indexOf(endMarker, contentStart);
+    if (end === -1) break;
+
+    try {
+      streams.push(inflateSync(pdf.subarray(contentStart, end)).toString("latin1"));
+    } catch {
+      // Ignore non-Flate streams such as embedded images and fonts.
+    }
+    offset = end + endMarker.length;
+  }
+
+  return streams;
+};
+
+const readPdfTextBlocks = (bytes) =>
+  readPdfContentStreams(bytes).flatMap((stream) =>
+    [...stream.matchAll(/BT\s+([\s\S]*?)\s+ET/g)].map(([, body]) => {
+      const matrix = body.match(/1 0 0 1 ([\d.-]+) ([\d.-]+) Tm/);
+      return {
+        x: matrix ? Number(matrix[1]) : undefined,
+        y: matrix ? Number(matrix[2]) : undefined
+      };
+    })
+  );
+
+// Rectangles are drawn in pdfkit's top-down page space while text matrices use PDF's
+// bottom-up space, so callers convert with `PAGE.height` before comparing them.
+const readPdfRectangles = (bytes) =>
+  readPdfContentStreams(bytes).flatMap((stream) =>
+    [...stream.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re/g)].map(([, x, y, width, height]) => ({
+      x: Number(x),
+      y: Number(y),
+      width: Number(width),
+      height: Number(height)
+    }))
+  );
 
 test("Arabic dates use Western digits", () => {
   assert.equal(formatDate(new Date(2026, 9, 12), "ar-MA"), "12/10/2026");
@@ -66,6 +121,39 @@ test("Arabic values in a left-to-right document fall back to the bundled font", 
   assert.ok(measureTextWidth(doc, isolate("بنك")) > 0);
 });
 
+test("a supplied font falls back when any character is missing, not only the first", () => {
+  const doc = new PDFDocument({ size: "A4" });
+  setTextDirection(doc, "rtl");
+  // A copy gives the custom font its own registration, distinct from the bundled fallback.
+  useFont(doc, Buffer.from(resolveBundledArabicFonts().regular), "Helvetica");
+
+  const usedFonts = [];
+  const applyFont = doc.font.bind(doc);
+  doc.font = (name, ...rest) => {
+    usedFonts.push(name);
+    return applyFont(name, ...rest);
+  };
+
+  const text = "شكر";
+  const coveredCodePoint = text.codePointAt(0);
+  doc._font.font.hasGlyphForCodePoint = (codePoint) => codePoint === coveredCodePoint;
+
+  usedFonts.length = 0;
+  layoutVisualLines(doc, text);
+
+  assert.ok(
+    usedFonts.includes("InvoiceKit-Fallback"),
+    "expected the fallback font when a later character in the run is missing"
+  );
+});
+
+test("a missing glyph does not fail when the bundled font is already registered", () => {
+  const doc = createDoc("rtl");
+  doc._font.font.hasGlyphForCodePoint = () => false;
+
+  assert.doesNotThrow(() => layoutVisualLines(doc, "شكر"));
+});
+
 test("party and bank lines use localized labels and separators", () => {
   const labels = getLabels("ar-MA");
   const plain = (line) => line.replace(/[⁦-⁩]/g, "");
@@ -92,6 +180,120 @@ test("Arabic invoices with mixed content, long labels, and bank details render",
   });
 
   assert.ok((await invoice.toPDF()).length > 0);
+});
+
+test("an oversized unbroken run wraps inside its column instead of overflowing", () => {
+  const doc = createDoc("rtl");
+  const width = 60;
+  const email = "verylongemailaddress@example-domain.com";
+  const emailLines = layoutVisualLines(doc, email, width);
+
+  assert.ok(emailLines.length > 1, "expected the long email to wrap");
+  assert.equal(emailLines.flat().join(""), email, "splitting must preserve every character in order");
+  for (const line of emailLines) {
+    assert.ok(
+      measureTextWidth(doc, line.join("")) <= width + 0.01,
+      `line "${line.join("")}" exceeded the column width`
+    );
+  }
+
+  const arabicWord = "استضافةسحابيةمتكاملةللشركات";
+  const arabicLines = layoutVisualLines(doc, arabicWord, width);
+
+  assert.ok(arabicLines.length > 1, "expected the long Arabic word to wrap");
+  for (const line of arabicLines) {
+    assert.ok(
+      measureTextWidth(doc, line.join("")) <= width + 0.5,
+      `line "${line.join("")}" exceeded the column width`
+    );
+  }
+});
+
+test("long Arabic notes continue on new pages instead of running off the page", async () => {
+  const notes = Array.from(
+    { length: 120 },
+    (_, index) => `سطر ملاحظة رقم ${index + 1} مع نص عربي طويل للاختبار`
+  ).join("\n");
+  const pdfBytes = await createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    number: "FAC-1",
+    items: [{ name: "خدمة", quantity: 1, price: 100 }],
+    notes,
+    footer: "IC Labs"
+  }).toPDF();
+
+  assert.ok(countPdfPages(pdfBytes) > 2, "expected the notes to span more than two pages");
+  const offPage = readPdfTextBlocks(pdfBytes).filter(
+    ({ y }) => y !== undefined && (y < 0 || y > PAGE.height)
+  );
+  assert.equal(offPage.length, 0, "expected no text to be drawn outside the page bounds");
+});
+
+test("Arabic documents mirror the totals box to the left while French keeps it on the right", async () => {
+  const common = {
+    number: "FAC-1",
+    items: [{ name: "خدمة", quantity: 1, price: 999999999 }],
+    vatRate: 0.2
+  };
+  const totalsX = (bytes) => {
+    const boxes = [...new Set(
+      readPdfRectangles(bytes)
+        .filter(({ width }) => Math.round(width) === 220)
+        .map(({ x }) => x)
+    )];
+    assert.equal(boxes.length, 1, "expected a single totals box");
+    return boxes[0];
+  };
+
+  const arabicPdf = await createInvoice({ ...common, locale: "ar-MA", title: "فاتورة" }).toPDF();
+  const frenchPdf = await createInvoice({ ...common, title: "Facture" }).toPDF();
+
+  assert.equal(Math.round(totalsX(arabicPdf)), Math.round(PAGE.margin));
+  assert.equal(Math.round(totalsX(frenchPdf)), Math.round(PAGE.width - PAGE.margin - 220));
+  assert.ok(totalsX(arabicPdf) < totalsX(frenchPdf), "expected the Arabic totals box on the left");
+});
+
+test("wrapped Arabic totals labels grow their rows and stay inside the totals box", async () => {
+  const pdfBytes = await createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    number: "FAC-1",
+    items: [{ name: "خدمة", quantity: 1, price: 999999999 }],
+    vatRate: 0.2
+  }).toPDF();
+
+  const bands = [...new Map(
+    readPdfRectangles(pdfBytes)
+      .filter(({ width }) => Math.round(width) === 220)
+      .map((rectangle) => [rectangle.y, rectangle])
+  ).values()];
+
+  assert.equal(bands.length, 5, "expected one rectangle per totals row");
+  assert.ok(
+    bands.some(({ height }) => height > 26),
+    "expected a wrapped label to grow its totals row beyond the minimum height"
+  );
+
+  const boxLeft = Math.min(...bands.map(({ x }) => x));
+  const boxTop = PAGE.height - Math.min(...bands.map(({ y }) => y));
+  const boxBottom = PAGE.height - Math.max(...bands.map(({ y, height }) => y + height));
+  const labels = readPdfTextBlocks(pdfBytes).filter(({ x, y }) =>
+    x !== undefined
+    && y !== undefined
+    && x >= boxLeft - 1
+    && x <= boxLeft + 221
+    && y >= boxBottom - 1
+    && y <= boxTop + 1
+  );
+
+  assert.ok(labels.length >= bands.length, "expected a label or value in every totals row");
+  for (const { y } of labels) {
+    const inRow = bands.some(({ y: rowY, height }) =>
+      y >= PAGE.height - rowY - height - 1 && y <= PAGE.height - rowY + 1
+    );
+    assert.ok(inRow, `totals text at y=${y} crossed a row border`);
+  }
 });
 
 test("French invoices accept Arabic values without custom fonts", async () => {
