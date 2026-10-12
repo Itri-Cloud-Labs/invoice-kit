@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Keep unbroken runs (long emails, references, units) inside their column by splitting words wider than the available width
 - Continue Arabic text blocks that exceed a page onto a new page instead of drawing below the page edge
 - Flow item rows taller than a page across pages: every cell continues on the next page, the table header and border repeat, and the text stops above the reserved footer area
+- Reject layouts that cannot fit a single table line on a page (an extreme `spacing.detailLineGap` or footer) instead of adding pages forever
 - Fall back to the bundled font when any character in a run is missing, not only the first one
 
 ## 0.3.2

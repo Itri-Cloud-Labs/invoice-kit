@@ -164,6 +164,26 @@ test("an oversized item row repeats its header and border while flowing across p
   assert.equal(offPage.length, 0, "expected no text outside the page bounds");
 });
 
+test("an oversized row fails instead of looping when no line fits on a page", async () => {
+  const withHugeGap = createInvoice({ items: [{ name: "Service", quantity: 1, price: 100 }] });
+  const tallFooter = Array.from({ length: 80 }, (_, index) => `FOOTER LINE ${index + 1}`).join("\n");
+  const withTallFooter = createInvoice({
+    items: [{ name: "Service", quantity: 1, price: 100 }],
+    footer: tallFooter
+  });
+
+  await assert.rejects(
+    () => withHugeGap.toPDF({ spacing: { detailLineGap: 800 } }),
+    /does not fit on a page/,
+    "expected a huge detailLineGap to be rejected"
+  );
+  await assert.rejects(
+    () => withTallFooter.toPDF(),
+    /does not fit on a page/,
+    "expected a footer that leaves no room for a line to be rejected"
+  );
+});
+
 test("item tables continue on a new page when there are many rows", async () => {
   const document = createInvoice({
     title: "Facture multi-pages",

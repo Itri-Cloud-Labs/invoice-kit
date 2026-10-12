@@ -159,12 +159,25 @@ export const renderDocumentPdf = async (
       run: layoutTextRun(doc, cell.text, { width: cell.width, align: cell.align, lineGap: detailLineGapY }),
       nextLine: 0
     }));
+    const freshPageTextTopY = PAGE.margin + tableHeaderHeight + tableTextOffsetY;
+    const lineHeight = Math.max(...entries.map((entry) => entry.run.lineHeight));
+    const unusableLayoutError = new Error(
+      "A table row does not fit on a page. Reduce options.spacing.detailLineGap or the footer height so at least one line fits."
+    );
+
+    // If a line cannot fit at the top of a fresh page the row can never advance. Reject the
+    // layout instead of adding pages (and allocating memory) forever.
+    if (freshPageTextTopY + lineHeight > textLimitY) {
+      throw unusableLayoutError;
+    }
 
     let segmentTopY = rowTopY;
+    let atFreshPageTop = false;
 
     for (;;) {
       const textTopY = segmentTopY + tableTextOffsetY;
       let contentLimitingBottomY = textTopY;
+      let progressed = false;
 
       doc.fillColor(colors.text).fontSize(10);
 
@@ -174,6 +187,7 @@ export const renderDocumentPdf = async (
         }
 
         const { nextLine, bottomY } = drawTextRun(doc, entry.run, entry.cell.x, textTopY, entry.nextLine, textLimitY);
+        progressed ||= nextLine > entry.nextLine;
         entry.nextLine = nextLine;
         contentLimitingBottomY = Math.max(contentLimitingBottomY, bottomY);
       }
@@ -187,10 +201,17 @@ export const renderDocumentPdf = async (
         return segmentBottomY;
       }
 
+      // A fresh page must always advance (the check above guarantees a line fits); guard
+      // against a non-terminating loop if that invariant is ever broken.
+      if (!progressed && atFreshPageTop) {
+        throw unusableLayoutError;
+      }
+
       doc.addPage();
       drawHeader(PAGE.margin);
       useFont(doc, fonts?.regular, "Helvetica");
       segmentTopY = PAGE.margin + tableHeaderHeight;
+      atFreshPageTop = true;
     }
   };
 
