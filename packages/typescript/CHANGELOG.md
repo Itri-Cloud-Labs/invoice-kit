@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.4.0
 
 - Render Arabic text in reading order: lines are reordered with the Unicode bidirectional algorithm and shaped as whole runs, fixing reversed word order, misplaced spaces, and reversed digits
 - Keep phone numbers, RIBs, references, and amounts intact inside right-to-left lines, and mirror brackets
