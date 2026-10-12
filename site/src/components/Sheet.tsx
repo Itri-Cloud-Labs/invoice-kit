@@ -55,9 +55,9 @@ const partyLines = (party: Party | undefined, labels: TemplateLabels, includeNam
   return [
     includeName ? (party.name ?? "") : "",
     ...(party.addressLines ?? []),
-    [party.city, party.country].filter(Boolean).join(", "),
-    party.phone ? `Tel: ${party.phone}` : "",
-    party.email ? `Email: ${party.email}` : "",
+    [party.city, party.country].filter(Boolean).join(labels.listSeparator),
+    party.phone ? `${labels.phone}: ${party.phone}` : "",
+    party.email ? `${labels.email}: ${party.email}` : "",
     party.taxId ? `${labels.if}: ${party.taxId}` : "",
     party.ice ? `${labels.ice}: ${party.ice}` : "",
     party.if ? `${labels.if}: ${party.if}` : "",

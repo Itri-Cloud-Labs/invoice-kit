@@ -1,16 +1,12 @@
 import type { LocaleCode } from "../core/types.js";
 
-export const formatDate = (date: Date, locale: LocaleCode): string => {
+export const formatDate = (date: Date, _locale: LocaleCode): string => {
   const day = date.getDate().toString().padStart(2, "0");
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const year = date.getFullYear().toString();
-  const formatted = `${day}/${month}/${year}`;
 
-  if (locale === "ar-MA") {
-    return formatted.replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)] ?? digit);
-  }
-
-  return formatted;
+  // Morocco writes dates with Western digits in Arabic as well, matching Intl's ar-MA amounts.
+  return `${day}/${month}/${year}`;
 };
 
 export const formatMoney = (amount: number, locale: LocaleCode, currency: string): string => {

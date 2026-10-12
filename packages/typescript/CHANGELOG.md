@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0
+
+- Render Arabic text in reading order: lines are reordered with the Unicode bidirectional algorithm and shaped as whole runs, fixing reversed word order, misplaced spaces, and reversed digits
+- Keep phone numbers, RIBs, references, and amounts intact inside right-to-left lines, and mirror brackets
+- Mirror the page layout for `ar-MA` documents so the issuer, item column, and totals labels start on the right
+- Format `ar-MA` dates with Western digits, matching amounts and Moroccan usage
+- Size the totals amount column to its content and grow totals rows for wrapped labels instead of clipping them
+- Draw Arabic content in `fr-MA` documents with the bundled DejaVu Sans fallback instead of unreadable glyphs
+- Add `phone`, `email`, and `listSeparator` to `TemplateLabels`, localize them in Arabic, and correct the `الأساس` spelling
+- Keep unbroken runs (long emails, references, units) inside their column by splitting words wider than the available width
+- Continue Arabic text blocks that exceed a page onto a new page instead of drawing below the page edge
+- Flow item rows taller than a page across pages: every cell continues on the next page, the table header and border repeat, and the text stops above the reserved footer area
+- Reject layouts that cannot fit a single table line on a page (an extreme `spacing.detailLineGap` or footer) instead of adding pages forever
+- Fall back to the bundled font when any character in a run is missing, not only the first one
+
 ## 0.3.2
 
 - Preserve row padding when long item names wrap across multiple lines

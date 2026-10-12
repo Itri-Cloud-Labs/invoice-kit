@@ -11,13 +11,16 @@ const packageRoot = (packageName) => dirname(require.resolve(`${packageName}/pac
 
 const pdfkitRoot = packageRoot("pdfkit");
 const dejavuRoot = packageRoot("dejavu-fonts-ttf");
+const bidiRoot = packageRoot("bidi-js");
 
 await mkdir(vendorOutput, { recursive: true });
 
 await Promise.all([
   copyFile(join(pdfkitRoot, "js", "pdfkit.standalone.js"), join(vendorOutput, "pdfkit.cjs")),
   copyFile(join(pdfkitRoot, "LICENSE"), join(vendorOutput, "PDFKit-LICENSE.txt")),
-  copyFile(join(dejavuRoot, "LICENSE"), join(vendorOutput, "DejaVu-LICENSE.txt"))
+  copyFile(join(dejavuRoot, "LICENSE"), join(vendorOutput, "DejaVu-LICENSE.txt")),
+  copyFile(join(bidiRoot, "dist", "bidi.js"), join(vendorOutput, "bidi.cjs")),
+  copyFile(join(bidiRoot, "LICENSE.txt"), join(vendorOutput, "bidi-js-LICENSE.txt"))
 ]);
 
 const [regularFont, boldFont] = await Promise.all([

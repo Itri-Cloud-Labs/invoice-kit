@@ -9,6 +9,7 @@ import {
   createQuote,
   createReturnNote
 } from "../dist/index.js";
+import { PAGE } from "../dist/renderers/pdf-support.js";
 
 const countPdfPages = (bytes) => {
   const pageMatches = Buffer.from(bytes).toString("latin1").match(/\/Type \/Page\b/g);
@@ -132,6 +133,55 @@ test("a detailed two-item invoice keeps its summary on one page", async () => {
   const pdfBytes = await document.toPDF();
 
   assert.equal(countPdfPages(pdfBytes), 1);
+});
+
+test("an oversized item row repeats its header and border while flowing across pages", async () => {
+  const description = Array.from(
+    { length: 160 },
+    (_, index) => `Long description paragraph number ${index + 1} for the product`
+  ).join(" ");
+  const pdfBytes = await createInvoice({
+    title: "Facture",
+    number: "FAC-1",
+    items: [{ name: "Produit", description, quantity: 2, unit: "mois", price: 1500 }]
+  }).toPDF();
+
+  const headers = readTableRectangles(pdfBytes).filter(({ height }) => Math.round(height) === 28);
+  const rowBorders = readTableRectangles(pdfBytes).filter(({ height }) => height > 28);
+
+  assert.ok(countPdfPages(pdfBytes) >= 2, "expected the oversized row to span pages");
+  assert.ok(rowBorders.length >= 2, "expected a border segment on each page the row spans");
+  for (const { height } of rowBorders) {
+    assert.ok(height <= PAGE.height, `row border of ${height} points is taller than a page`);
+  }
+  assert.ok(
+    headers.length >= rowBorders.length,
+    "expected a table header on every page the row spans"
+  );
+  const offPage = readPdfTextBlocks(pdfBytes).filter(
+    ({ y }) => y !== undefined && (y < 0 || y > PAGE.height)
+  );
+  assert.equal(offPage.length, 0, "expected no text outside the page bounds");
+});
+
+test("an oversized row fails instead of looping when no line fits on a page", async () => {
+  const withHugeGap = createInvoice({ items: [{ name: "Service", quantity: 1, price: 100 }] });
+  const tallFooter = Array.from({ length: 80 }, (_, index) => `FOOTER LINE ${index + 1}`).join("\n");
+  const withTallFooter = createInvoice({
+    items: [{ name: "Service", quantity: 1, price: 100 }],
+    footer: tallFooter
+  });
+
+  await assert.rejects(
+    () => withHugeGap.toPDF({ spacing: { detailLineGap: 800 } }),
+    /does not fit on a page/,
+    "expected a huge detailLineGap to be rejected"
+  );
+  await assert.rejects(
+    () => withTallFooter.toPDF(),
+    /does not fit on a page/,
+    "expected a footer that leaves no room for a line to be rejected"
+  );
 });
 
 test("item tables continue on a new page when there are many rows", async () => {

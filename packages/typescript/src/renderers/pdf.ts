@@ -16,9 +16,18 @@ import {
   normalizeFooterText,
   resolveColors,
   resolvePdfFonts,
-  truncateText,
-  useFont
+  truncateText
 } from "./pdf-support.js";
+import {
+  drawTextRun,
+  formatLabelValue,
+  isolate,
+  layoutTextRun,
+  measureTextHeight,
+  measureTextWidth,
+  setTextDirection,
+  useFont
+} from "./pdf-text.js";
 
 const resolveSpacing = (value: number | undefined, fallback: number, name: string): number => {
   if (value === undefined) {
@@ -39,13 +48,16 @@ export const renderDocumentPdf = async (
   const labels = getLabels(document.locale);
   const colors = resolveColors(document.colors);
   const fonts = resolvePdfFonts(document, options);
-  const isArabic = document.locale === "ar-MA";
+  const isRtl = document.locale === "ar-MA";
   const isQuantityOnly = isQuantityOnlyDocument(document.type);
-  const align: "left" | "right" = isArabic ? "right" : "left";
+  // Right-to-left documents mirror the whole page: text starts on the right, numeric
+  // columns end on the left, and every block swaps sides.
+  const align: "left" | "right" = isRtl ? "right" : "left";
+  const endAlign: "left" | "right" = isRtl ? "left" : "right";
+  const mirrorX = (x: number, width: number): number => (isRtl ? PAGE.width - x - width : x);
   const leftColumnX = PAGE.margin;
   const rightColumnX = PAGE.margin + 275;
   const columnWidth = 224;
-  const metaTopX = rightColumnX;
   const tableX = PAGE.margin;
   const tableWidth = PAGE.width - PAGE.margin * 2;
   const spacing = options?.spacing;
@@ -97,9 +109,10 @@ export const renderDocumentPdf = async (
   });
 
   const pdfBytesPromise = collectPdf(doc);
+  setTextDirection(doc, isRtl ? "rtl" : "ltr");
   const logoBuffer = document.issuer?.logo ? await fetchLogo(document.issuer.logo) : null;
   const fallbackFooter = [document.title, document.number].filter(Boolean).join(" ");
-  const footerText = normalizeFooterText(document.footer ?? fallbackFooter);
+  const footerText = isolate(normalizeFooterText(document.footer ?? fallbackFooter));
   const footerOptions = {
     width: tableWidth,
     align: "center" as const,
@@ -107,10 +120,12 @@ export const renderDocumentPdf = async (
   };
   useFont(doc, fonts?.regular, "Helvetica");
   doc.fontSize(8);
-  const footerHeight = footerText.length > 0 ? doc.heightOfString(footerText, footerOptions) : 0;
+  const footerHeight = footerText.length > 0 ? measureTextHeight(doc, footerText, footerOptions) : 0;
   const contentBottomY = PAGE.height - Math.max(PAGE.margin + 8, footerHeight + 8);
-  const issuerTextX = leftColumnX + (logoBuffer ? 92 : 0);
+  const pageRowCapacityY = contentBottomY - (PAGE.margin + tableHeaderHeight);
   const issuerTextWidth = logoBuffer ? 148 : 240;
+  const issuerTextX = mirrorX(leftColumnX + (logoBuffer ? 92 : 0), issuerTextWidth);
+  const titleX = mirrorX(rightColumnX, columnWidth);
   const ensureTableRowSpace = (currentY: number, rowHeight: number, drawHeader: (headerY: number) => void): number => {
     if (currentY + rowHeight <= contentBottomY) {
       return currentY;
@@ -118,12 +133,92 @@ export const renderDocumentPdf = async (
 
     doc.addPage();
     drawHeader(PAGE.margin);
+    useFont(doc, fonts?.regular, "Helvetica");
     return PAGE.margin + tableHeaderHeight;
+  };
+  const rowTextBottomGapY = tableRowVerticalPadding - tableTextOffsetY;
+  type TableCell = { text: string; x: number; width: number; align: "left" | "right" };
+  const drawRowCells = (rowTopY: number, cells: TableCell[]): void => {
+    doc.fillColor(colors.text).fontSize(10);
+
+    for (const cell of cells) {
+      drawFixedText(doc, cell.text, cell.x, rowTopY + tableTextOffsetY, {
+        width: cell.width,
+        align: cell.align,
+        lineGap: detailLineGapY
+      });
+    }
+  };
+  // A row taller than a page cannot fit anywhere. Flow every cell across pages instead: draw
+  // as many lines as fit on each page, repeat the table header, and close each page segment
+  // at the footer-aware content limit so text never crosses its border.
+  const flowOversizedRow = (cells: TableCell[], drawHeader: (headerY: number) => void, rowTopY: number): number => {
+    const textLimitY = contentBottomY - rowTextBottomGapY;
+    const entries = cells.map((cell) => ({
+      cell,
+      run: layoutTextRun(doc, cell.text, { width: cell.width, align: cell.align, lineGap: detailLineGapY }),
+      nextLine: 0
+    }));
+    const freshPageTextTopY = PAGE.margin + tableHeaderHeight + tableTextOffsetY;
+    const lineHeight = Math.max(...entries.map((entry) => entry.run.lineHeight));
+    const unusableLayoutError = new Error(
+      "A table row does not fit on a page. Reduce options.spacing.detailLineGap or the footer height so at least one line fits."
+    );
+
+    // If a line cannot fit at the top of a fresh page the row can never advance. Reject the
+    // layout instead of adding pages (and allocating memory) forever.
+    if (freshPageTextTopY + lineHeight > textLimitY) {
+      throw unusableLayoutError;
+    }
+
+    let segmentTopY = rowTopY;
+    let atFreshPageTop = false;
+
+    for (;;) {
+      const textTopY = segmentTopY + tableTextOffsetY;
+      let contentLimitingBottomY = textTopY;
+      let progressed = false;
+
+      doc.fillColor(colors.text).fontSize(10);
+
+      for (const entry of entries) {
+        if (entry.nextLine >= entry.run.lineCount) {
+          continue;
+        }
+
+        const { nextLine, bottomY } = drawTextRun(doc, entry.run, entry.cell.x, textTopY, entry.nextLine, textLimitY);
+        progressed ||= nextLine > entry.nextLine;
+        entry.nextLine = nextLine;
+        contentLimitingBottomY = Math.max(contentLimitingBottomY, bottomY);
+      }
+
+      const isComplete = entries.every((entry) => entry.nextLine >= entry.run.lineCount);
+      const segmentBottomY = isComplete ? contentLimitingBottomY + rowTextBottomGapY : contentBottomY;
+
+      doc.strokeColor(colors.border).lineWidth(1).rect(tableX, segmentTopY, tableWidth, segmentBottomY - segmentTopY).stroke();
+
+      if (isComplete) {
+        return segmentBottomY;
+      }
+
+      // A fresh page must always advance (the check above guarantees a line fits); guard
+      // against a non-terminating loop if that invariant is ever broken.
+      if (!progressed && atFreshPageTop) {
+        throw unusableLayoutError;
+      }
+
+      doc.addPage();
+      drawHeader(PAGE.margin);
+      useFont(doc, fonts?.regular, "Helvetica");
+      segmentTopY = PAGE.margin + tableHeaderHeight;
+      atFreshPageTop = true;
+    }
   };
 
   if (logoBuffer) {
-    doc.image(logoBuffer, leftColumnX, PAGE.headerTop, {
-      fit: logoFit
+    doc.image(logoBuffer, mirrorX(leftColumnX, logoFit[0]), PAGE.headerTop, {
+      fit: logoFit,
+      ...(isRtl ? { align: "right" as const } : {})
     });
   }
 
@@ -134,7 +229,7 @@ export const renderDocumentPdf = async (
   if (issuerName) {
     useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.primary).fontSize(17);
-    issuerHeaderBottomY = drawFixedText(doc, issuerName, issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
+    issuerHeaderBottomY = drawFixedText(doc, isolate(issuerName), issuerTextX, PAGE.headerTop + issuerNameOffsetY, {
       width: issuerTextWidth,
       align
     });
@@ -158,7 +253,7 @@ export const renderDocumentPdf = async (
   if (document.title) {
     useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.text).fontSize(20);
-    titleBottomY = drawFixedText(doc, document.title, rightColumnX, PAGE.headerTop, {
+    titleBottomY = drawFixedText(doc, isolate(document.title), titleX, PAGE.headerTop, {
       width: columnWidth,
       align,
       lineBreak: true
@@ -169,20 +264,20 @@ export const renderDocumentPdf = async (
   if (document.number) {
     useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.metaText).fontSize(9);
-    metaBottomY = drawFixedText(doc, `${labels.number}: ${document.number}`, rightColumnX, titleBottomY + titleMetaGapY, {
+    metaBottomY = drawFixedText(doc, formatLabelValue(labels.number, document.number), titleX, titleBottomY + titleMetaGapY, {
       width: columnWidth,
       align
     });
   }
 
   if (document.issueDate) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align, colors.metaText));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, titleX, metaBottomY + metaRowGapY, labels.issueDate, formatDate(document.issueDate, document.locale), columnWidth, align, colors.metaText));
   }
   if (document.dueDate) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align, colors.metaText));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, titleX, metaBottomY + metaRowGapY, labels.dueDate, formatDate(document.dueDate, document.locale), columnWidth, align, colors.metaText));
   }
   if (!isQuantityOnly && document.currency) {
-    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, metaTopX, metaBottomY + metaRowGapY, labels.currency, document.currency, columnWidth, align, colors.metaText));
+    metaBottomY = Math.max(metaBottomY, drawLabelValue(doc, titleX, metaBottomY + metaRowGapY, labels.currency, document.currency, columnWidth, align, colors.metaText));
   }
 
   const minimumHeaderBottomY = PAGE.headerTop + (isQuantityOnly ? 72 : 48);
@@ -195,17 +290,17 @@ export const renderDocumentPdf = async (
     useFont(doc, fonts?.bold, "Helvetica-Bold");
     doc.fillColor(colors.mutedText).fontSize(10);
     if (sellerLines.length > 0) {
-      drawFixedText(doc, labels.seller, leftColumnX, sectionsTopY, { width: columnWidth, align });
+      drawFixedText(doc, labels.seller, mirrorX(leftColumnX, columnWidth), sectionsTopY, { width: columnWidth, align });
     }
     if (clientLines.length > 0) {
-      drawFixedText(doc, labels.client, rightColumnX, sectionsTopY, { width: columnWidth, align });
+      drawFixedText(doc, labels.client, titleX, sectionsTopY, { width: columnWidth, align });
     }
 
     useFont(doc, fonts?.regular, "Helvetica");
     doc.fillColor(colors.text).fontSize(9);
     let leftSectionBottomY = sectionsTopY;
     if (sellerLines.length > 0) {
-      leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), leftColumnX, sectionsTopY + sectionBodyOffsetY, {
+      leftSectionBottomY = drawFixedText(doc, sellerLines.join("\n"), mirrorX(leftColumnX, 270), sectionsTopY + sectionBodyOffsetY, {
         width: 270,
         align,
         lineGap: detailLineGapY
@@ -214,7 +309,7 @@ export const renderDocumentPdf = async (
 
     let clientBottomY = sectionsTopY;
     if (clientLines.length > 0) {
-      clientBottomY = drawFixedText(doc, clientLines.join("\n"), rightColumnX, sectionsTopY + sectionBodyOffsetY, {
+      clientBottomY = drawFixedText(doc, clientLines.join("\n"), titleX, sectionsTopY + sectionBodyOffsetY, {
         width: columnWidth,
         align,
         lineGap: detailLineGapY
@@ -229,9 +324,9 @@ export const renderDocumentPdf = async (
   if (hasItems) {
     if (isQuantityOnly) {
       const columns = {
-        itemX: tableX + 12,
+        itemX: mirrorX(tableX + 12, 350),
         itemWidth: 350,
-        quantityX: tableX + 400,
+        quantityX: mirrorX(tableX + 400, 50),
         quantityWidth: 50
       };
 
@@ -240,7 +335,7 @@ export const renderDocumentPdf = async (
         useFont(doc, fonts?.bold, "Helvetica-Bold");
         doc.fillColor(colors.onPrimary).fontSize(10);
         drawFixedText(doc, labels.item, columns.itemX, headerY + 8, { width: columns.itemWidth, align });
-        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 8, { width: columns.quantityWidth, align: "right" });
+        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 8, { width: columns.quantityWidth, align: endAlign });
       };
 
       if (y + tableHeaderHeight > contentBottomY) {
@@ -250,37 +345,52 @@ export const renderDocumentPdf = async (
       drawHeader(y);
       y += tableHeaderHeight;
       useFont(doc, fonts?.regular, "Helvetica");
+      let pageHasRow = false;
+
       for (const item of items) {
-        const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-        const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
+        const itemLabel = isolate(item.description ? `${item.name} - ${item.description}` : item.name);
+        const quantityLabel = isolate(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
+        const cells: TableCell[] = [
+          { text: itemLabel, x: columns.itemX, width: columns.itemWidth, align },
+          { text: quantityLabel, x: columns.quantityX, width: columns.quantityWidth, align: endAlign }
+        ];
         const rowHeight = getMaxRowHeight(doc, [
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: endAlign, lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
-        y = ensureTableRowSpace(y, rowHeight, drawHeader);
+
+        if (rowHeight > pageRowCapacityY) {
+          if (pageHasRow || contentBottomY - y < tableRowMinHeight) {
+            doc.addPage();
+            drawHeader(PAGE.margin);
+            useFont(doc, fonts?.regular, "Helvetica");
+            y = PAGE.margin + tableHeaderHeight;
+          }
+
+          y = flowOversizedRow(cells, drawHeader, y);
+          pageHasRow = true;
+          continue;
+        }
+
+        const nextY = ensureTableRowSpace(y, rowHeight, drawHeader);
+        if (nextY !== y) {
+          pageHasRow = false;
+        }
+        y = nextY;
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
-        doc.fillColor(colors.text).fontSize(10);
-        drawFixedText(doc, itemLabel, columns.itemX, y + tableTextOffsetY, {
-          width: columns.itemWidth,
-          align,
-          lineGap: detailLineGapY
-        });
-        drawFixedText(doc, quantityLabel, columns.quantityX, y + tableTextOffsetY, {
-          width: columns.quantityWidth,
-          align: "right",
-          lineGap: detailLineGapY
-        });
+        drawRowCells(y, cells);
+        pageHasRow = true;
         y += rowHeight;
       }
     } else {
       const columns = {
-        itemX: tableX + 12,
+        itemX: mirrorX(tableX + 12, 220),
         itemWidth: 220,
-        quantityX: tableX + 240,
+        quantityX: mirrorX(tableX + 240, 45),
         quantityWidth: 45,
-        unitPriceX: tableX + 300,
+        unitPriceX: mirrorX(tableX + 300, 78),
         unitPriceWidth: 78,
-        amountX: tableX + 392,
+        amountX: mirrorX(tableX + 392, 95),
         amountWidth: 95
       };
 
@@ -289,9 +399,9 @@ export const renderDocumentPdf = async (
         useFont(doc, fonts?.bold, "Helvetica-Bold");
         doc.fillColor(colors.onPrimary).fontSize(10);
         drawFixedText(doc, labels.item, columns.itemX, headerY + 8, { width: columns.itemWidth, align });
-        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 8, { width: columns.quantityWidth, align: "right" });
-        drawFixedText(doc, labels.unitPrice, columns.unitPriceX, headerY + 8, { width: columns.unitPriceWidth, align: "right" });
-        drawFixedText(doc, labels.amount, columns.amountX, headerY + 8, { width: columns.amountWidth, align: "right" });
+        drawFixedText(doc, labels.quantity, columns.quantityX, headerY + 8, { width: columns.quantityWidth, align: endAlign });
+        drawFixedText(doc, labels.unitPrice, columns.unitPriceX, headerY + 8, { width: columns.unitPriceWidth, align: endAlign });
+        drawFixedText(doc, labels.amount, columns.amountX, headerY + 8, { width: columns.amountWidth, align: endAlign });
       };
 
       if (y + tableHeaderHeight > contentBottomY) {
@@ -301,34 +411,45 @@ export const renderDocumentPdf = async (
       drawHeader(y);
       y += tableHeaderHeight;
       useFont(doc, fonts?.regular, "Helvetica");
+      let pageHasRow = false;
+
       for (const item of items) {
-        const itemLabel = item.description ? `${item.name} - ${item.description}` : item.name;
-        const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`;
+        const itemLabel = isolate(item.description ? `${item.name} - ${item.description}` : item.name);
+        const quantityLabel = isolate(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
+        const unitPriceLabel = isolate(truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth));
+        const amountLabel = isolate(truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency ?? "MAD"), columns.amountWidth));
+        const cells: TableCell[] = [
+          { text: itemLabel, x: columns.itemX, width: columns.itemWidth, align },
+          { text: quantityLabel, x: columns.quantityX, width: columns.quantityWidth, align: endAlign },
+          { text: unitPriceLabel, x: columns.unitPriceX, width: columns.unitPriceWidth, align: endAlign },
+          { text: amountLabel, x: columns.amountX, width: columns.amountWidth, align: endAlign }
+        ];
         const rowHeight = getMaxRowHeight(doc, [
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
-          { text: quantityLabel, width: columns.quantityWidth, options: { align: "right", lineGap: detailLineGapY } }
+          { text: quantityLabel, width: columns.quantityWidth, options: { align: endAlign, lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
-        y = ensureTableRowSpace(y, rowHeight, drawHeader);
+
+        if (rowHeight > pageRowCapacityY) {
+          if (pageHasRow || contentBottomY - y < tableRowMinHeight) {
+            doc.addPage();
+            drawHeader(PAGE.margin);
+            useFont(doc, fonts?.regular, "Helvetica");
+            y = PAGE.margin + tableHeaderHeight;
+          }
+
+          y = flowOversizedRow(cells, drawHeader, y);
+          pageHasRow = true;
+          continue;
+        }
+
+        const nextY = ensureTableRowSpace(y, rowHeight, drawHeader);
+        if (nextY !== y) {
+          pageHasRow = false;
+        }
+        y = nextY;
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
-        doc.fillColor(colors.text).fontSize(10);
-        drawFixedText(doc, itemLabel, columns.itemX, y + tableTextOffsetY, {
-          width: columns.itemWidth,
-          align,
-          lineGap: detailLineGapY
-        });
-        drawFixedText(doc, quantityLabel, columns.quantityX, y + tableTextOffsetY, {
-          width: columns.quantityWidth,
-          align: "right",
-          lineGap: detailLineGapY
-        });
-        drawFixedText(doc, truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth), columns.unitPriceX, y + tableTextOffsetY, {
-          width: columns.unitPriceWidth,
-          align: "right"
-        });
-        drawFixedText(doc, truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency ?? "MAD"), columns.amountWidth), columns.amountX, y + tableTextOffsetY, {
-          width: columns.amountWidth,
-          align: "right"
-        });
+        drawRowCells(y, cells);
+        pageHasRow = true;
         y += rowHeight;
       }
     }
@@ -336,28 +457,29 @@ export const renderDocumentPdf = async (
 
   const notes: string[] = [];
   if (!isQuantityOnly && document.paymentTerms?.label) {
-    notes.push(`${labels.paymentTerms}: ${document.paymentTerms.label}`);
+    notes.push(formatLabelValue(labels.paymentTerms, document.paymentTerms.label));
   }
   if (!isQuantityOnly && document.paymentTerms?.notes) {
-    notes.push(document.paymentTerms.notes);
+    notes.push(isolate(document.paymentTerms.notes));
   }
   if (document.notes) {
-    notes.push(`${labels.notes}: ${document.notes}`);
+    notes.push(formatLabelValue(labels.notes, document.notes));
   }
 
   const bankText = bankLines?.join("\n");
   const leftDetailsWidth = tableWidth - 236;
+  const leftDetailsX = mirrorX(tableX, leftDetailsWidth);
   useFont(doc, fonts?.regular, "Helvetica");
   doc.fontSize(9);
   const bankDetailsHeight = bankText
-    ? bankDetailsBodyOffsetY + doc.heightOfString(bankText, {
+    ? bankDetailsBodyOffsetY + measureTextHeight(doc, bankText, {
       width: leftDetailsWidth,
       align,
       lineGap: detailLineGapY
     })
     : 0;
   const notesHeight = notes.length > 0
-    ? notesBodyOffsetY + doc.heightOfString(notes.join("\n"), {
+    ? notesBodyOffsetY + measureTextHeight(doc, notes.join("\n"), {
       width: leftDetailsWidth,
       align,
       lineGap: 1
@@ -372,11 +494,11 @@ export const renderDocumentPdf = async (
     if (bankText) {
       useFont(doc, fonts?.bold, "Helvetica-Bold");
       doc.fillColor(colors.mutedText).fontSize(9);
-      drawFixedText(doc, labels.bankDetails, tableX, startY, { width: leftDetailsWidth, align });
+      drawFixedText(doc, labels.bankDetails, leftDetailsX, startY, { width: leftDetailsWidth, align });
 
       useFont(doc, fonts?.regular, "Helvetica");
       doc.fillColor(colors.text).fontSize(9);
-      leftBottomY = drawFixedText(doc, bankText, tableX, startY + bankDetailsBodyOffsetY, {
+      leftBottomY = drawFixedText(doc, bankText, leftDetailsX, startY + bankDetailsBodyOffsetY, {
         width: leftDetailsWidth,
         align,
         lineGap: detailLineGapY
@@ -387,11 +509,11 @@ export const renderDocumentPdf = async (
       const notesTopY = bankText ? leftBottomY + bankNotesGapY : startY;
       useFont(doc, fonts?.bold, "Helvetica-Bold");
       doc.fillColor(colors.mutedText).fontSize(10);
-      drawFixedText(doc, labels.notes, tableX, notesTopY, { width: leftDetailsWidth, align });
+      drawFixedText(doc, labels.notes, leftDetailsX, notesTopY, { width: leftDetailsWidth, align });
 
       useFont(doc, fonts?.regular, "Helvetica");
       doc.fillColor(colors.text).fontSize(9);
-      leftBottomY = drawFixedText(doc, notes.join("\n"), tableX, notesTopY + notesBodyOffsetY, {
+      leftBottomY = drawFixedText(doc, notes.join("\n"), leftDetailsX, notesTopY + notesBodyOffsetY, {
         width: leftDetailsWidth,
         align,
         lineGap: 1
@@ -402,21 +524,45 @@ export const renderDocumentPdf = async (
   };
 
   if (!isQuantityOnly && document.totals) {
-    const totalsHeight = summaryRowHeight * 5;
+    const money = (amount: number): string => formatMoney(amount, document.locale, document.currency ?? "MAD");
+    const totalsBoxWidth = 220;
+    const totalsPadding = 10;
+    const totalsX = mirrorX(PAGE.width - PAGE.margin - totalsBoxWidth, totalsBoxWidth);
+    const totals = [
+      [labels.subtotal, money(document.totals.subtotal)],
+      [labels.discount, money(document.totals.discountTotal)],
+      [labels.taxableBase, money(document.totals.taxableBase)],
+      [`${labels.vat} (${((document.vatRate ?? 0) * 100).toFixed(0)}%)`, money(document.totals.vatAmount)],
+      [labels.total, money(document.totals.total)]
+    ] as const;
+    const useTotalsFont = (isTotal: boolean): void => {
+      useFont(doc, isTotal ? fonts?.bold : fonts?.regular, isTotal ? "Helvetica-Bold" : "Helvetica");
+      doc.fontSize(10);
+    };
+
+    // The amount column grows to fit the widest amount, and rows grow with wrapped labels,
+    // so wider fonts and longer translated labels are neither truncated nor clipped.
+    const valueWidth = totals.reduce((widest, [, value], index) => {
+      useTotalsFont(index === totals.length - 1);
+      return Math.max(widest, Math.min(120, Math.ceil(measureTextWidth(doc, value))));
+    }, 85);
+    const labelWidth = totalsBoxWidth - totalsPadding * 3 - valueWidth;
+    const totalsStartX = totalsX + totalsPadding;
+    const labelX = isRtl ? totalsX + totalsBoxWidth - totalsPadding - labelWidth : totalsStartX;
+    const valueX = isRtl ? totalsStartX : totalsX + totalsBoxWidth - totalsPadding - valueWidth;
+    const rowHeights = totals.map(([label], index) => {
+      useTotalsFont(index === totals.length - 1);
+      const labelHeight = measureTextHeight(doc, label, { width: labelWidth, align });
+      return Math.max(summaryRowHeight, labelHeight + summaryRowHeight - doc.currentLineHeight(true));
+    });
+    const totalsHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
+
     y = ensureSectionSpace(
       doc,
       y + trailingSectionGapY,
       Math.max(totalsHeight, leftDetailsHeight),
       contentBottomY
     ) - trailingSectionGapY;
-    const totalsX = PAGE.width - PAGE.margin - 220;
-    const totals = [
-      [labels.subtotal, formatMoney(document.totals.subtotal, document.locale, document.currency ?? "MAD")],
-      [labels.discount, formatMoney(document.totals.discountTotal, document.locale, document.currency ?? "MAD")],
-      [labels.taxableBase, formatMoney(document.totals.taxableBase, document.locale, document.currency ?? "MAD")],
-      [`${labels.vat} (${((document.vatRate ?? 0) * 100).toFixed(0)}%)`, formatMoney(document.totals.vatAmount, document.locale, document.currency ?? "MAD")],
-      [labels.total, formatMoney(document.totals.total, document.locale, document.currency ?? "MAD")]
-    ] as const;
 
     y += trailingSectionGapY;
     const trailingBottomY = drawLeftDetails(y);
@@ -424,14 +570,15 @@ export const renderDocumentPdf = async (
     let totalsY = y;
     totals.forEach(([label, value], index) => {
       const isTotal = index === totals.length - 1;
-      doc.fillColor(isTotal ? colors.primary : "white").rect(totalsX, totalsY, 220, summaryRowHeight).fill();
-      doc.strokeColor(colors.border).lineWidth(1).rect(totalsX, totalsY, 220, summaryRowHeight).stroke();
+      const rowHeight = rowHeights[index] ?? summaryRowHeight;
+      doc.fillColor(isTotal ? colors.primary : "white").rect(totalsX, totalsY, totalsBoxWidth, rowHeight).fill();
+      doc.strokeColor(colors.border).lineWidth(1).rect(totalsX, totalsY, totalsBoxWidth, rowHeight).stroke();
 
-      useFont(doc, isTotal ? fonts?.bold : fonts?.regular, isTotal ? "Helvetica-Bold" : "Helvetica");
-      doc.fillColor(isTotal ? colors.onPrimary : colors.text).fontSize(10);
-      drawFixedText(doc, label, totalsX + 10, totalsY + 9, { width: 105, align: "left" });
-      drawFixedText(doc, truncateText(doc, value, 85), totalsX + 125, totalsY + 9, { width: 85, align: "right" });
-      totalsY += summaryRowHeight;
+      useTotalsFont(isTotal);
+      doc.fillColor(isTotal ? colors.onPrimary : colors.text);
+      drawFixedText(doc, label, labelX, totalsY + 9, { width: labelWidth, align });
+      drawFixedText(doc, isolate(truncateText(doc, value, valueWidth)), valueX, totalsY + 9, { width: valueWidth, align: endAlign });
+      totalsY += rowHeight;
     });
     y = Math.max(totalsY, trailingBottomY + trailingBottomGapY);
   } else if (leftDetailsHeight > 0) {
