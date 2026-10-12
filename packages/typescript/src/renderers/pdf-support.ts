@@ -1,26 +1,14 @@
-import { readFileSync } from "node:fs";
 import type { BankInfo, BusinessDocumentData, DocumentColors, Party, PdfFontSource, PdfRenderOptions } from "../core/types.js";
 import { getLabels } from "../locales/index.js";
-import bundledFontBase64 from "../vendor/dejavu-fonts.cjs";
-
-type PdfFontPair = { regular: PdfFontSource; bold: PdfFontSource };
-
-const STANDARD_PDF_FONTS = new Set([
-  "Courier",
-  "Courier-Bold",
-  "Courier-Oblique",
-  "Courier-BoldOblique",
-  "Helvetica",
-  "Helvetica-Bold",
-  "Helvetica-Oblique",
-  "Helvetica-BoldOblique",
-  "Times-Roman",
-  "Times-Bold",
-  "Times-Italic",
-  "Times-BoldItalic",
-  "Symbol",
-  "ZapfDingbats"
-]);
+import {
+  drawText,
+  formatLabelValue,
+  isolate,
+  measureTextHeight,
+  measureTextWidth,
+  resolveBundledArabicFonts,
+  type PdfFontPair
+} from "./pdf-text.js";
 
 export const PAGE = {
   margin: 48,
@@ -65,17 +53,6 @@ const normalizeFontPair = (regular?: PdfFontSource, bold?: PdfFontSource): PdfFo
   };
 };
 
-let bundledArabicFonts: PdfFontPair | undefined;
-
-const resolveBundledArabicFonts = (): PdfFontPair => {
-  bundledArabicFonts ??= {
-    regular: Buffer.from(bundledFontBase64.regular, "base64"),
-    bold: Buffer.from(bundledFontBase64.bold, "base64")
-  };
-
-  return bundledArabicFonts;
-};
-
 export const collectPdf = async (doc: PDFKit.PDFDocument): Promise<Uint8Array> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -117,18 +94,6 @@ export const fetchLogo = async (logoUrl: string): Promise<ArrayBuffer> => {
   }
 };
 
-export const useFont = (doc: PDFKit.PDFDocument, fontSource: PdfFontSource | undefined, fallback: "Helvetica" | "Helvetica-Bold"): void => {
-  if (fontSource) {
-    const resolvedFont = typeof fontSource === "string" && !STANDARD_PDF_FONTS.has(fontSource)
-      ? readFileSync(fontSource)
-      : fontSource;
-    doc.font(resolvedFont);
-    return;
-  }
-
-  doc.font(fallback);
-};
-
 export const resolvePdfFonts = (
   document: BusinessDocumentData,
   options?: PdfRenderOptions
@@ -147,36 +112,19 @@ export const resolvePdfFonts = (
 };
 
 export const truncateText = (doc: PDFKit.PDFDocument, value: string, width: number): string => {
-  if (doc.widthOfString(value) <= width) {
+  if (measureTextWidth(doc, value) <= width) {
     return value;
   }
 
   let truncated = value;
-  while (truncated.length > 0 && doc.widthOfString(`${truncated}...`) > width) {
+  while (truncated.length > 0 && measureTextWidth(doc, `${truncated}...`) > width) {
     truncated = truncated.slice(0, -1);
   }
 
   return truncated.length > 0 ? `${truncated}...` : "...";
 };
 
-export const drawFixedText = (
-  doc: PDFKit.PDFDocument,
-  text: string,
-  x: number,
-  y: number,
-  options: PDFKit.Mixins.TextOptions
-): number => {
-  const previousX = doc.x;
-  const previousY = doc.y;
-
-  doc.x = x;
-  doc.y = y;
-  doc.text(text, x, y, options);
-  doc.x = previousX;
-  doc.y = previousY;
-
-  return y + doc.heightOfString(text, options);
-};
+export const drawFixedText = drawText;
 
 export const normalizeFooterText = (footer: string): string =>
   footer
@@ -209,7 +157,7 @@ export const drawLabelValue = (
   color: string
 ): number => {
   doc.fillColor(color).fontSize(10);
-  return drawFixedText(doc, `${label}: ${value}`, x, y, { width, align });
+  return drawFixedText(doc, formatLabelValue(label, value), x, y, { width, align });
 };
 
 export const resolveColors = (colors?: DocumentColors): Required<DocumentColors> => ({
@@ -225,7 +173,7 @@ const getWrappedRowHeight = (
   options: PDFKit.Mixins.TextOptions,
   verticalPadding: number
 ): number => {
-  const textHeight = doc.heightOfString(text, { ...options, width });
+  const textHeight = measureTextHeight(doc, text, { ...options, width });
   return Math.max(minHeight, Math.ceil(textHeight + verticalPadding));
 };
 
@@ -244,27 +192,31 @@ export const buildPartyLines = (party: Party | undefined, labels: ReturnType<typ
   }
 
   return [
-    includeName ? (party.name ?? "") : "",
-    ...(party.addressLines ?? []),
-    [party.city, party.country].filter(Boolean).join(", "),
-    party.phone ? `Tel: ${party.phone}` : "",
-    party.email ? `Email: ${party.email}` : "",
-    party.taxId ? `${labels.if}: ${party.taxId}` : "",
-    party.ice ? `${labels.ice}: ${party.ice}` : "",
-    party.if ? `${labels.if}: ${party.if}` : "",
-    party.rc ? `${labels.rc}: ${party.rc}` : ""
+    includeName ? isolate(party.name ?? "") : "",
+    ...(party.addressLines ?? []).map(isolate),
+    isolate([party.city, party.country].filter(Boolean).join(labels.listSeparator)),
+    party.phone ? formatLabelValue(labels.phone, party.phone) : "",
+    party.email ? formatLabelValue(labels.email, party.email) : "",
+    party.taxId ? formatLabelValue(labels.if, party.taxId) : "",
+    party.ice ? formatLabelValue(labels.ice, party.ice) : "",
+    party.if ? formatLabelValue(labels.if, party.if) : "",
+    party.rc ? formatLabelValue(labels.rc, party.rc) : ""
   ].filter((line) => line.length > 0);
 };
 
 export const buildBankLines = (bankInfo: BankInfo, labels: ReturnType<typeof getLabels>): string[] => {
   const baseLines = [
-    `${labels.bankName}: ${bankInfo.bankName}`,
-    `${labels.holderName}: ${bankInfo.holderName}`
+    formatLabelValue(labels.bankName, bankInfo.bankName),
+    formatLabelValue(labels.holderName, bankInfo.holderName)
   ];
 
   if (bankInfo.type === "local") {
-    return [...baseLines, `${labels.rib}: ${bankInfo.rib}`];
+    return [...baseLines, formatLabelValue(labels.rib, bankInfo.rib)];
   }
 
-  return [...baseLines, `${labels.swiftCode}: ${bankInfo.swiftCode}`, `${labels.iban}: ${bankInfo.iban}`];
+  return [
+    ...baseLines,
+    formatLabelValue(labels.swiftCode, bankInfo.swiftCode),
+    formatLabelValue(labels.iban, bankInfo.iban)
+  ];
 };

@@ -14,7 +14,7 @@ export const arLabels: TemplateLabels = {
   amount: "المبلغ",
   subtotal: "المجموع الفرعي",
   discount: "الخصم",
-  taxableBase: "الاساس الخاضع للضريبة",
+  taxableBase: "الأساس الخاضع للضريبة",
   vat: "الضريبة على القيمة المضافة",
   total: "المجموع",
   paymentTerms: "شروط الدفع",
@@ -28,5 +28,8 @@ export const arLabels: TemplateLabels = {
   iban: "آيبان",
   ice: "ICE",
   if: "IF",
-  rc: "RC"
+  rc: "RC",
+  phone: "الهاتف",
+  email: "البريد الإلكتروني",
+  listSeparator: "، "
 };

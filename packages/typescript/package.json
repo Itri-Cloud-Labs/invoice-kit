@@ -57,6 +57,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "@types/pdfkit": "^0.17.3",
+    "bidi-js": "1.1.0",
     "dejavu-fonts-ttf": "2.37.3",
     "pdfkit": "0.17.2",
     "typescript": "^5.8.3"

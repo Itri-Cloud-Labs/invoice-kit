@@ -28,5 +28,8 @@ export const frLabels: TemplateLabels = {
   iban: "IBAN",
   ice: "ICE",
   if: "IF",
-  rc: "RC"
+  rc: "RC",
+  phone: "Tel",
+  email: "Email",
+  listSeparator: ", "
 };

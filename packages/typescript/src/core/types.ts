@@ -192,6 +192,9 @@ export interface TemplateLabels {
   ice: string;
   if: string;
   rc: string;
+  phone: string;
+  email: string;
+  listSeparator: string;
 }
 
 export interface TemplateDefinition {

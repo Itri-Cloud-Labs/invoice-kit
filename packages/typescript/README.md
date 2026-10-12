@@ -484,10 +484,14 @@ await quote.toPDF({
 
 You can still provide your own Arabic-capable fonts when you want a different visual style. Custom font values may be filesystem paths, `Uint8Array` instances, or `ArrayBuffer` instances.
 
+With `locale: "ar-MA"` the page is mirrored: the issuer block, the item column, and the totals labels start on the right. Text is laid out with the Unicode bidirectional algorithm, so mixed content such as `شركة الأطلس SARL`, phone numbers, RIBs, and amounts keeps its reading order. Dates and amounts use Western digits.
+
+Arabic values also work in `fr-MA` documents. The page stays left-to-right, and any Arabic text your fonts cannot draw falls back to the bundled DejaVu Sans.
+
 ## Testing
 
 - `npm test` builds the library and runs the automated `node:test` suite
-- automated tests cover totals, VAT edge cases, validation, sparse document modules, quantity-only document normalization, bundled Arabic fallback, SVG/WEBP remote logos, and table pagination
+- automated tests cover totals, VAT edge cases, validation, sparse document modules, quantity-only document normalization, bundled Arabic fallback, right-to-left text ordering, SVG/WEBP remote logos, and table pagination
 - `npm run smoke` still generates end-to-end sample PDFs for manual inspection
 
 ## Remote Logo Support
