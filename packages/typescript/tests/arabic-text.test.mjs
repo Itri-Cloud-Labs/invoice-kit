@@ -76,6 +76,37 @@ const readPdfRectangles = (bytes) =>
     }))
   );
 
+// The totals box is 220 points wide; each of its rows is a separate rectangle.
+const readTotalsRowBands = (bytes) => [...new Map(
+  readPdfRectangles(bytes)
+    .filter(({ width }) => Math.round(width) === 220)
+    .map((rectangle) => [rectangle.y, rectangle])
+).values()];
+
+// Asserts that every text block inside the totals box stays within its row band, which
+// catches wrapped labels crossing row borders.
+const assertTotalsRowsContainText = (bytes, bands) => {
+  const boxLeft = Math.min(...bands.map(({ x }) => x));
+  const boxTop = PAGE.height - Math.min(...bands.map(({ y }) => y));
+  const boxBottom = PAGE.height - Math.max(...bands.map(({ y, height }) => y + height));
+  const labels = readPdfTextBlocks(bytes).filter(({ x, y }) =>
+    x !== undefined
+    && y !== undefined
+    && x >= boxLeft - 1
+    && x <= boxLeft + 221
+    && y >= boxBottom - 1
+    && y <= boxTop + 1
+  );
+
+  assert.ok(labels.length >= bands.length, "expected a label or value in every totals row");
+  for (const { y } of labels) {
+    const inRow = bands.some(({ y: rowY, height }) =>
+      y >= PAGE.height - rowY - height - 1 && y <= PAGE.height - rowY + 1
+    );
+    assert.ok(inRow, `totals text at y=${y} crossed a row border`);
+  }
+};
+
 test("Arabic dates use Western digits", () => {
   assert.equal(formatDate(new Date(2026, 9, 12), "ar-MA"), "12/10/2026");
 });
@@ -178,8 +209,19 @@ test("Arabic invoices with mixed content, long labels, and bank details render",
     notes: "شكرا لثقتكم (المرجع: REF-77).",
     footer: "مختبرات إتري كلاود\nICE: 001234567000089"
   });
+  const pdfBytes = await invoice.toPDF();
 
-  assert.ok((await invoice.toPDF()).length > 0);
+  assert.ok(pdfBytes.length > 0);
+  // Rendered positions: the mirrored totals box sits at the left margin.
+  const totalsBands = readTotalsRowBands(pdfBytes);
+  assert.equal(totalsBands.length, 5, "expected five totals rows");
+  assert.equal(
+    Math.round(Math.min(...totalsBands.map(({ x }) => x))),
+    Math.round(PAGE.margin),
+    "expected the mirrored totals box at the left margin"
+  );
+  // Row bounds: wrapped labels stay inside their row.
+  assertTotalsRowsContainText(pdfBytes, totalsBands);
 });
 
 test("an oversized unbroken run wraps inside its column instead of overflowing", () => {
@@ -263,6 +305,59 @@ test("an oversized Arabic item row repeats its header and border while flowing a
   assert.equal(offPage.length, 0, "expected no text outside the page bounds");
 });
 
+test("an oversized quantity cell flows across pages with its item", async () => {
+  const unit = Array.from({ length: 90 }, (_, index) => `وحدة قياس رقم ${index + 1}`).join(" ");
+  const pdfBytes = await createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    number: "FAC-1",
+    items: [{ name: "منتج", description: "وصف قصير", quantity: 2, unit, price: 1500 }]
+  }).toPDF();
+
+  const rowBorders = readPdfRectangles(pdfBytes).filter(
+    ({ x, width, height }) => Math.round(x) === 48 && Math.round(width) === 499 && height > 28
+  );
+
+  assert.ok(rowBorders.length >= 2, "expected the oversized quantity cell to span pages");
+  for (const { height } of rowBorders) {
+    assert.ok(height <= PAGE.height, `row border of ${height} points is taller than a page`);
+  }
+  const offPage = readPdfTextBlocks(pdfBytes).filter(
+    ({ y }) => y !== undefined && (y < 0 || y > PAGE.height)
+  );
+  assert.equal(offPage.length, 0, "expected no text outside the page bounds");
+});
+
+test("a tall footer is not overlapped by an oversized item row", async () => {
+  const footerLines = 10;
+  const footer = Array.from({ length: footerLines }, (_, index) => `FOOTER LINE ${index + 1}`).join("\n");
+  const description = Array.from(
+    { length: 150 },
+    (_, index) => `فقرة وصف طويلة رقم ${index + 1} للمنتج`
+  ).join(" ");
+  const pdfBytes = await createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    number: "FAC-1",
+    items: [{ name: "منتج", description, quantity: 2, unit: "شهر", price: 1500 }],
+    footer
+  }).toPDF();
+
+  const rowBorders = readPdfRectangles(pdfBytes).filter(
+    ({ x, width, height }) => Math.round(x) === 48 && Math.round(width) === 499 && height > 28
+  );
+  const contentBottomY = Math.max(...rowBorders.map(({ y, height }) => y + height));
+  const reservedBand = readPdfTextBlocks(pdfBytes).filter(
+    ({ y }) => y !== undefined && y < PAGE.height - contentBottomY - 1
+  );
+
+  assert.ok(reservedBand.length > 0, "expected the footer to render inside the reserved band");
+  assert.ok(
+    reservedBand.length <= footerLines,
+    `expected only the footer below the content limit, found ${reservedBand.length} blocks`
+  );
+});
+
 test("Arabic documents mirror the totals box to the left while French keeps it on the right", async () => {
   const common = {
     number: "FAC-1",
@@ -296,37 +391,14 @@ test("wrapped Arabic totals labels grow their rows and stay inside the totals bo
     vatRate: 0.2
   }).toPDF();
 
-  const bands = [...new Map(
-    readPdfRectangles(pdfBytes)
-      .filter(({ width }) => Math.round(width) === 220)
-      .map((rectangle) => [rectangle.y, rectangle])
-  ).values()];
+  const bands = readTotalsRowBands(pdfBytes);
 
   assert.equal(bands.length, 5, "expected one rectangle per totals row");
   assert.ok(
     bands.some(({ height }) => height > 26),
     "expected a wrapped label to grow its totals row beyond the minimum height"
   );
-
-  const boxLeft = Math.min(...bands.map(({ x }) => x));
-  const boxTop = PAGE.height - Math.min(...bands.map(({ y }) => y));
-  const boxBottom = PAGE.height - Math.max(...bands.map(({ y, height }) => y + height));
-  const labels = readPdfTextBlocks(pdfBytes).filter(({ x, y }) =>
-    x !== undefined
-    && y !== undefined
-    && x >= boxLeft - 1
-    && x <= boxLeft + 221
-    && y >= boxBottom - 1
-    && y <= boxTop + 1
-  );
-
-  assert.ok(labels.length >= bands.length, "expected a label or value in every totals row");
-  for (const { y } of labels) {
-    const inRow = bands.some(({ y: rowY, height }) =>
-      y >= PAGE.height - rowY - height - 1 && y <= PAGE.height - rowY + 1
-    );
-    assert.ok(inRow, `totals text at y=${y} crossed a row border`);
-  }
+  assertTotalsRowsContainText(pdfBytes, bands);
 });
 
 test("French invoices accept Arabic values without custom fonts", async () => {

@@ -7,31 +7,29 @@ export type TextDirection = "ltr" | "rtl";
 export type PdfFontPair = { regular: PdfFontSource; bold: PdfFontSource };
 
 type TextAlign = "left" | "right" | "center";
-type TextBlockOptions = { width?: number | undefined; align?: string | undefined; lineGap?: number | undefined };
+export type TextBlockOptions = { width?: number | undefined; align?: string | undefined; lineGap?: number | undefined };
 
-export type PdfTextOptions = PDFKit.Mixins.TextOptions & {
-  /**
-   * Called when the next line does not fit on the current page. The callback must open the
-   * new page itself (for example with `doc.addPage()`) and return the y coordinate to
-   * resume at. When omitted, `drawText` adds a page and continues at the top margin.
-   */
-  onPageBreak?: (() => number) | undefined;
-  /**
-   * Set to false to keep the block on the page it started on. Callers that must keep
-   * several blocks together (a table row) use this and manage the page breaks themselves.
-   */
-  pageBreak?: boolean | undefined;
-};
-
-interface Piece {
+export interface Piece {
   text: string;
   width: number;
   font: string;
 }
 
-interface Line {
+export interface Line {
   pieces: Piece[];
   width: number;
+}
+
+// A laid-out block of text. Callers that must break a block at their own boundaries (a
+// table row) measure it once with `layoutTextRun` and then draw it page by page with
+// `drawTextRun`, so every cell on a page starts and stops at the same y.
+export interface PdfTextRun {
+  width: number | undefined;
+  lineCount: number;
+  lineHeight: number;
+  baselineOffset: number;
+  align: TextAlign;
+  lines: Line[];
 }
 
 interface TextState {
@@ -378,6 +376,63 @@ export const measureTextHeight = (doc: PDFKit.PDFDocument, text: string, options
   return layoutText(doc, text, options.width).length * lineHeightOf(doc, options);
 };
 
+const baselineOffsetOf = (doc: PDFKit.PDFDocument): number =>
+  (activeFont(doc).ascender / 1000) * (doc as unknown as { _fontSize: number })._fontSize;
+
+// Measures a text block once so a caller can draw slices of it across pages.
+export const layoutTextRun = (doc: PDFKit.PDFDocument, text: string, options: TextBlockOptions): PdfTextRun => {
+  const lines = layoutText(doc, text, options.width);
+
+  return {
+    width: options.width,
+    lineCount: lines.length,
+    lineHeight: lineHeightOf(doc, options),
+    baselineOffset: baselineOffsetOf(doc),
+    align: (options.align ?? "left") as TextAlign,
+    lines
+  };
+};
+
+// Draws lines [fromLine, ...) of a laid-out block until the next line would pass `maxY`.
+// Returns the line to resume at and the y coordinate just below the last line drawn.
+export const drawTextRun = (
+  doc: PDFKit.PDFDocument,
+  run: PdfTextRun,
+  x: number,
+  y: number,
+  fromLine: number,
+  maxY: number
+): { nextLine: number; bottomY: number } => {
+  const state = getState(doc);
+  let index = fromLine;
+  let lineTopY = y;
+
+  for (; index < run.lineCount; index += 1) {
+    if (lineTopY + run.lineHeight > maxY) {
+      break;
+    }
+
+    const line = run.lines[index]!;
+    const freeWidth = (run.width ?? line.width) - line.width;
+    let pieceX = x + (run.align === "right" ? freeWidth : run.align === "center" ? freeWidth / 2 : 0);
+
+    for (const piece of line.pieces) {
+      doc.font(piece.font);
+      doc.text(piece.text, pieceX, lineTopY + run.baselineOffset, {
+        lineBreak: false,
+        baseline: "alphabetic",
+        features: []
+      });
+      pieceX += piece.width;
+    }
+
+    lineTopY += run.lineHeight;
+  }
+
+  doc.font(state.font);
+  return { nextLine: index, bottomY: lineTopY };
+};
+
 // Draws a text block at a fixed position without moving the document cursor and returns
 // the y coordinate just below it. Text without right-to-left characters goes straight to
 // pdfkit; anything else is reordered and shaped line by line first.
@@ -386,55 +441,44 @@ export const drawText = (
   text: string,
   x: number,
   y: number,
-  options: PdfTextOptions
+  options: PDFKit.Mixins.TextOptions
 ): number => {
   const previousX = doc.x;
   const previousY = doc.y;
   let bottomY: number;
 
-  if (!hasRtlText(text) && !options.onPageBreak) {
+  if (!hasRtlText(text)) {
     const plainText = stripBidiControls(text);
-    const { onPageBreak, pageBreak, ...pdfOptions } = options;
-    doc.text(plainText, x, y, pdfOptions);
-    bottomY = y + doc.heightOfString(plainText, pdfOptions);
+    doc.text(plainText, x, y, options);
+    bottomY = y + doc.heightOfString(plainText, options);
   } else {
-    const state = getState(doc);
-    const lines = layoutText(doc, text, options.width);
-    const lineHeight = lineHeightOf(doc, options);
-    const baselineOffset = (activeFont(doc).ascender / 1000) * (doc as unknown as { _fontSize: number })._fontSize;
-    const align = (options.align ?? "left") as TextAlign;
+    const run = layoutTextRun(doc, text, options);
     let lineTopY = y;
+    let nextLine = 0;
 
-    for (const line of lines) {
+    while (nextLine < run.lineCount) {
       // A long block (notes, bank details) can exceed one page. Continue at the top of a
-      // fresh page instead of drawing the remaining lines below the page edge. Table rows
-      // disable this and open pages themselves so borders, headers, and cells stay together.
-      if (options.pageBreak !== false && lineTopY + lineHeight > doc.page.maxY()) {
-        if (options.onPageBreak) {
-          lineTopY = options.onPageBreak();
-        } else {
-          doc.addPage();
-          lineTopY = doc.page.margins.top;
-        }
+      // fresh page instead of drawing the remaining lines below the page edge.
+      if (lineTopY + run.lineHeight > doc.page.maxY()) {
+        doc.addPage();
+        lineTopY = doc.page.margins.top;
       }
 
-      const freeWidth = (options.width ?? line.width) - line.width;
-      let pieceX = x + (align === "right" ? freeWidth : align === "center" ? freeWidth / 2 : 0);
+      const result = drawTextRun(doc, run, x, lineTopY, nextLine, doc.page.maxY());
 
-      for (const piece of line.pieces) {
-        doc.font(piece.font);
-        doc.text(piece.text, pieceX, lineTopY + baselineOffset, {
-          lineBreak: false,
-          baseline: "alphabetic",
-          features: []
-        });
-        pieceX += piece.width;
+      if (result.nextLine === nextLine) {
+        // A line taller than the page cannot make progress on its own; force it through so
+        // the loop terminates instead of opening pages forever.
+        const forced = drawTextRun(doc, run, x, doc.page.margins.top, nextLine, Number.POSITIVE_INFINITY);
+        lineTopY = forced.bottomY;
+        nextLine = forced.nextLine;
+      } else {
+        lineTopY = result.bottomY;
+        nextLine = result.nextLine;
       }
-
-      lineTopY += lineHeight;
     }
 
-    doc.font(state.font);
+    doc.font(getState(doc).font);
     bottomY = lineTopY;
   }
 

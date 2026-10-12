@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 - Add `phone`, `email`, and `listSeparator` to `TemplateLabels`, localize them in Arabic, and correct the `الأساس` spelling
 - Keep unbroken runs (long emails, references, units) inside their column by splitting words wider than the available width
 - Continue Arabic text blocks that exceed a page onto a new page instead of drawing below the page edge
-- Flow item rows taller than a page across pages, repeating the table header and border and keeping the quantity and price cells on the item's first page
+- Flow item rows taller than a page across pages: every cell continues on the next page, the table header and border repeat, and the text stops above the reserved footer area
 - Fall back to the bundled font when any character in a run is missing, not only the first one
 
 ## 0.3.2
