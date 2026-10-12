@@ -230,6 +230,39 @@ test("long Arabic notes continue on new pages instead of running off the page", 
   assert.equal(offPage.length, 0, "expected no text to be drawn outside the page bounds");
 });
 
+test("an oversized Arabic item row repeats its header and border while flowing across pages", async () => {
+  const description = Array.from(
+    { length: 160 },
+    (_, index) => `فقرة وصف طويلة رقم ${index + 1} للمنتج`
+  ).join(" ");
+  const pdfBytes = await createInvoice({
+    locale: "ar-MA",
+    title: "فاتورة",
+    number: "FAC-1",
+    items: [{ name: "منتج", description, quantity: 2, unit: "شهر", price: 1500 }]
+  }).toPDF();
+
+  const tableRectangles = readPdfRectangles(pdfBytes).filter(
+    ({ x, width }) => Math.round(x) === 48 && Math.round(width) === 499
+  );
+  const headers = tableRectangles.filter(({ height }) => Math.round(height) === 28);
+  const rowBorders = tableRectangles.filter(({ height }) => height > 28);
+
+  assert.ok(countPdfPages(pdfBytes) >= 2, "expected the oversized row to span pages");
+  assert.ok(rowBorders.length >= 2, "expected a border segment on each page the row spans");
+  for (const { height } of rowBorders) {
+    assert.ok(height <= PAGE.height, `row border of ${height} points is taller than a page`);
+  }
+  assert.ok(
+    headers.length >= rowBorders.length,
+    "expected a table header on every page the row spans"
+  );
+  const offPage = readPdfTextBlocks(pdfBytes).filter(
+    ({ y }) => y !== undefined && (y < 0 || y > PAGE.height)
+  );
+  assert.equal(offPage.length, 0, "expected no text outside the page bounds");
+});
+
 test("Arabic documents mirror the totals box to the left while French keeps it on the right", async () => {
   const common = {
     number: "FAC-1",

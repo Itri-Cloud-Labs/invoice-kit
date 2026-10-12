@@ -113,6 +113,7 @@ export const renderDocumentPdf = async (
   doc.fontSize(8);
   const footerHeight = footerText.length > 0 ? measureTextHeight(doc, footerText, footerOptions) : 0;
   const contentBottomY = PAGE.height - Math.max(PAGE.margin + 8, footerHeight + 8);
+  const pageRowCapacityY = contentBottomY - (PAGE.margin + tableHeaderHeight);
   const issuerTextWidth = logoBuffer ? 148 : 240;
   const issuerTextX = mirrorX(leftColumnX + (logoBuffer ? 92 : 0), issuerTextWidth);
   const titleX = mirrorX(rightColumnX, columnWidth);
@@ -125,6 +126,44 @@ export const renderDocumentPdf = async (
     drawHeader(PAGE.margin);
     useFont(doc, fonts?.regular, "Helvetica");
     return PAGE.margin + tableHeaderHeight;
+  };
+  const rowTextBottomGapY = tableRowVerticalPadding - tableTextOffsetY;
+  // A row taller than a page cannot fit anywhere. Flow it across pages instead of letting
+  // the cell paginate on its own: repeat the table header and draw a border segment on each
+  // page, and keep the other cells on the segment where the item starts.
+  const flowOversizedRow = (
+    itemLabel: string,
+    itemColumn: { x: number; width: number },
+    drawOtherCells: (rowTopY: number) => void,
+    drawHeader: (headerY: number) => void,
+    rowTopY: number
+  ): number => {
+    let segmentTopY = rowTopY;
+
+    const drawSegmentBorder = (top: number, bottom: number): void => {
+      doc.strokeColor(colors.border).lineWidth(1).rect(tableX, top, tableWidth, bottom - top).stroke();
+    };
+
+    drawOtherCells(segmentTopY);
+
+    const itemBottomY = drawFixedText(doc, itemLabel, itemColumn.x, segmentTopY + tableTextOffsetY, {
+      width: itemColumn.width,
+      align,
+      lineGap: detailLineGapY,
+      onPageBreak: () => {
+        drawSegmentBorder(segmentTopY, contentBottomY);
+        doc.addPage();
+        drawHeader(PAGE.margin);
+        useFont(doc, fonts?.regular, "Helvetica");
+        doc.fillColor(colors.text).fontSize(10);
+        segmentTopY = PAGE.margin + tableHeaderHeight;
+        return segmentTopY + tableTextOffsetY;
+      }
+    });
+
+    const bottomY = itemBottomY + rowTextBottomGapY;
+    drawSegmentBorder(segmentTopY, bottomY);
+    return bottomY;
   };
 
   if (logoBuffer) {
@@ -257,6 +296,17 @@ export const renderDocumentPdf = async (
       drawHeader(y);
       y += tableHeaderHeight;
       useFont(doc, fonts?.regular, "Helvetica");
+      let pageHasRow = false;
+      const drawQuantityCell = (rowTopY: number, quantityLabel: string): void => {
+        doc.fillColor(colors.text).fontSize(10);
+        drawFixedText(doc, quantityLabel, columns.quantityX, rowTopY + tableTextOffsetY, {
+          width: columns.quantityWidth,
+          align: endAlign,
+          lineGap: detailLineGapY,
+          pageBreak: false
+        });
+      };
+
       for (const item of items) {
         const itemLabel = isolate(item.description ? `${item.name} - ${item.description}` : item.name);
         const quantityLabel = isolate(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
@@ -264,7 +314,31 @@ export const renderDocumentPdf = async (
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: endAlign, lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
-        y = ensureTableRowSpace(y, rowHeight, drawHeader);
+
+        if (rowHeight > pageRowCapacityY) {
+          if (pageHasRow || contentBottomY - y < tableRowMinHeight) {
+            doc.addPage();
+            drawHeader(PAGE.margin);
+            useFont(doc, fonts?.regular, "Helvetica");
+            y = PAGE.margin + tableHeaderHeight;
+          }
+
+          y = flowOversizedRow(
+            itemLabel,
+            { x: columns.itemX, width: columns.itemWidth },
+            (rowTopY) => drawQuantityCell(rowTopY, quantityLabel),
+            drawHeader,
+            y
+          );
+          pageHasRow = true;
+          continue;
+        }
+
+        const nextY = ensureTableRowSpace(y, rowHeight, drawHeader);
+        if (nextY !== y) {
+          pageHasRow = false;
+        }
+        y = nextY;
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
         drawFixedText(doc, itemLabel, columns.itemX, y + tableTextOffsetY, {
@@ -272,11 +346,8 @@ export const renderDocumentPdf = async (
           align,
           lineGap: detailLineGapY
         });
-        drawFixedText(doc, quantityLabel, columns.quantityX, y + tableTextOffsetY, {
-          width: columns.quantityWidth,
-          align: endAlign,
-          lineGap: detailLineGapY
-        });
+        drawQuantityCell(y, quantityLabel);
+        pageHasRow = true;
         y += rowHeight;
       }
     } else {
@@ -308,6 +379,27 @@ export const renderDocumentPdf = async (
       drawHeader(y);
       y += tableHeaderHeight;
       useFont(doc, fonts?.regular, "Helvetica");
+      let pageHasRow = false;
+      const drawValueCells = (rowTopY: number, item: (typeof items)[number]): void => {
+        doc.fillColor(colors.text).fontSize(10);
+        drawFixedText(doc, isolate(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`), columns.quantityX, rowTopY + tableTextOffsetY, {
+          width: columns.quantityWidth,
+          align: endAlign,
+          lineGap: detailLineGapY,
+          pageBreak: false
+        });
+        drawFixedText(doc, isolate(truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth)), columns.unitPriceX, rowTopY + tableTextOffsetY, {
+          width: columns.unitPriceWidth,
+          align: endAlign,
+          pageBreak: false
+        });
+        drawFixedText(doc, isolate(truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency ?? "MAD"), columns.amountWidth)), columns.amountX, rowTopY + tableTextOffsetY, {
+          width: columns.amountWidth,
+          align: endAlign,
+          pageBreak: false
+        });
+      };
+
       for (const item of items) {
         const itemLabel = isolate(item.description ? `${item.name} - ${item.description}` : item.name);
         const quantityLabel = isolate(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
@@ -315,7 +407,31 @@ export const renderDocumentPdf = async (
           { text: itemLabel, width: columns.itemWidth, options: { align, lineGap: detailLineGapY } },
           { text: quantityLabel, width: columns.quantityWidth, options: { align: endAlign, lineGap: detailLineGapY } }
         ], tableRowMinHeight, tableRowVerticalPadding);
-        y = ensureTableRowSpace(y, rowHeight, drawHeader);
+
+        if (rowHeight > pageRowCapacityY) {
+          if (pageHasRow || contentBottomY - y < tableRowMinHeight) {
+            doc.addPage();
+            drawHeader(PAGE.margin);
+            useFont(doc, fonts?.regular, "Helvetica");
+            y = PAGE.margin + tableHeaderHeight;
+          }
+
+          y = flowOversizedRow(
+            itemLabel,
+            { x: columns.itemX, width: columns.itemWidth },
+            (rowTopY) => drawValueCells(rowTopY, item),
+            drawHeader,
+            y
+          );
+          pageHasRow = true;
+          continue;
+        }
+
+        const nextY = ensureTableRowSpace(y, rowHeight, drawHeader);
+        if (nextY !== y) {
+          pageHasRow = false;
+        }
+        y = nextY;
         doc.strokeColor(colors.border).lineWidth(1).rect(tableX, y, tableWidth, rowHeight).stroke();
         doc.fillColor(colors.text).fontSize(10);
         drawFixedText(doc, itemLabel, columns.itemX, y + tableTextOffsetY, {
@@ -323,19 +439,8 @@ export const renderDocumentPdf = async (
           align,
           lineGap: detailLineGapY
         });
-        drawFixedText(doc, quantityLabel, columns.quantityX, y + tableTextOffsetY, {
-          width: columns.quantityWidth,
-          align: endAlign,
-          lineGap: detailLineGapY
-        });
-        drawFixedText(doc, isolate(truncateText(doc, formatMoney(item.unitPrice, document.locale, document.currency ?? "MAD"), columns.unitPriceWidth)), columns.unitPriceX, y + tableTextOffsetY, {
-          width: columns.unitPriceWidth,
-          align: endAlign
-        });
-        drawFixedText(doc, isolate(truncateText(doc, formatMoney(item.lineTotal, document.locale, document.currency ?? "MAD"), columns.amountWidth)), columns.amountX, y + tableTextOffsetY, {
-          width: columns.amountWidth,
-          align: endAlign
-        });
+        drawValueCells(y, item);
+        pageHasRow = true;
         y += rowHeight;
       }
     }

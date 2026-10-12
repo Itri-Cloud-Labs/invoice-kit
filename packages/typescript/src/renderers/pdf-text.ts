@@ -9,6 +9,20 @@ export type PdfFontPair = { regular: PdfFontSource; bold: PdfFontSource };
 type TextAlign = "left" | "right" | "center";
 type TextBlockOptions = { width?: number | undefined; align?: string | undefined; lineGap?: number | undefined };
 
+export type PdfTextOptions = PDFKit.Mixins.TextOptions & {
+  /**
+   * Called when the next line does not fit on the current page. The callback must open the
+   * new page itself (for example with `doc.addPage()`) and return the y coordinate to
+   * resume at. When omitted, `drawText` adds a page and continues at the top margin.
+   */
+  onPageBreak?: (() => number) | undefined;
+  /**
+   * Set to false to keep the block on the page it started on. Callers that must keep
+   * several blocks together (a table row) use this and manage the page breaks themselves.
+   */
+  pageBreak?: boolean | undefined;
+};
+
 interface Piece {
   text: string;
   width: number;
@@ -372,16 +386,17 @@ export const drawText = (
   text: string,
   x: number,
   y: number,
-  options: PDFKit.Mixins.TextOptions
+  options: PdfTextOptions
 ): number => {
   const previousX = doc.x;
   const previousY = doc.y;
   let bottomY: number;
 
-  if (!hasRtlText(text)) {
+  if (!hasRtlText(text) && !options.onPageBreak) {
     const plainText = stripBidiControls(text);
-    doc.text(plainText, x, y, options);
-    bottomY = y + doc.heightOfString(plainText, options);
+    const { onPageBreak, pageBreak, ...pdfOptions } = options;
+    doc.text(plainText, x, y, pdfOptions);
+    bottomY = y + doc.heightOfString(plainText, pdfOptions);
   } else {
     const state = getState(doc);
     const lines = layoutText(doc, text, options.width);
@@ -392,10 +407,15 @@ export const drawText = (
 
     for (const line of lines) {
       // A long block (notes, bank details) can exceed one page. Continue at the top of a
-      // fresh page instead of drawing the remaining lines below the page edge.
-      if (lineTopY + lineHeight > doc.page.maxY()) {
-        doc.addPage();
-        lineTopY = doc.page.margins.top;
+      // fresh page instead of drawing the remaining lines below the page edge. Table rows
+      // disable this and open pages themselves so borders, headers, and cells stay together.
+      if (options.pageBreak !== false && lineTopY + lineHeight > doc.page.maxY()) {
+        if (options.onPageBreak) {
+          lineTopY = options.onPageBreak();
+        } else {
+          doc.addPage();
+          lineTopY = doc.page.margins.top;
+        }
       }
 
       const freeWidth = (options.width ?? line.width) - line.width;
